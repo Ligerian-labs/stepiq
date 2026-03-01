@@ -5,8 +5,9 @@
   "packageManager": "bun@1.3.4",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "dev": "dotenv -- turbo run dev --env-mode=loose --parallel --filter=@stepiq/api --filter=@stepiq/landing --filter=@stepiq/app --filter=@stepiq/worker",
+    "dev": "dotenv -- turbo run dev --env-mode=loose --parallel --filter=@stepiq/api --filter=@stepiq/connectors --filter=@stepiq/landing --filter=@stepiq/app --filter=@stepiq/worker",
     "dev:api": "turbo run dev --filter=@stepiq/api",
+    "dev:connectors": "turbo run dev --filter=@stepiq/connectors",
     "dev:landing": "turbo run dev --filter=@stepiq/landing",
     "dev:app": "turbo run dev --filter=@stepiq/app",
     "dev:worker": "turbo run dev --filter=@stepiq/worker",

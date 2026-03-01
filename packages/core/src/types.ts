@@ -1,13 +1,7 @@
 import type { z } from "zod";
 import type {
-  createApiKeySchema,
-  createPipelineSchema,
-  createScheduleSchema,
-  pipelineDefinitionSchema,
-  pipelineStepSchema,
-  runPipelineSchema,
-} from "./schemas";
-import type {
+  CONNECTOR_PRIVACY_MODES,
+  CONNECTOR_PROVIDERS,
   OUTPUT_FORMATS,
   PIPELINE_STATUSES,
   PLANS,
@@ -16,6 +10,17 @@ import type {
   STEP_TYPES,
   TRIGGER_TYPES,
 } from "./domain";
+import type {
+  connectorActionRequestSchema,
+  connectorStepConfigSchema,
+  createApiKeySchema,
+  createPipelineSchema,
+  createScheduleSchema,
+  pipelineDefinitionSchema,
+  pipelineStepSchema,
+  runPipelineSchema,
+  sanitizedToolEventSchema,
+} from "./schemas";
 
 // ── Pipeline Types ──
 
@@ -34,6 +39,10 @@ export type PipelineStatus = (typeof PIPELINE_STATUSES)[number];
 export type Plan = (typeof PLANS)[number];
 
 export type RunFundingMode = "legacy" | "app_credits" | "byok_required";
+
+export type ConnectorProvider = (typeof CONNECTOR_PROVIDERS)[number];
+
+export type ConnectorPrivacyMode = (typeof CONNECTOR_PRIVACY_MODES)[number];
 
 // ── Pipeline Definition ──
 
@@ -211,3 +220,11 @@ export type RunPipelinePayload = z.infer<typeof runPipelineSchema>;
 export type CreateSchedulePayload = z.infer<typeof createScheduleSchema>;
 
 export type CreateApiKeyPayload = z.infer<typeof createApiKeySchema>;
+
+export type SanitizedToolEvent = z.infer<typeof sanitizedToolEventSchema>;
+
+export type ConnectorActionRequest = z.infer<
+  typeof connectorActionRequestSchema
+>;
+
+export type ConnectorStepConfig = z.infer<typeof connectorStepConfigSchema>;

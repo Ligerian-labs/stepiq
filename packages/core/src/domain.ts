@@ -1,5 +1,6 @@
 export const STEP_TYPES = [
   "llm",
+  "connector",
   "transform",
   "condition",
   "parallel",
@@ -37,3 +38,17 @@ export const STEP_STATUSES = [
 export const PIPELINE_STATUSES = ["draft", "active", "archived"] as const;
 
 export const PLANS = ["free", "starter", "pro", "enterprise"] as const;
+
+export const CONNECTOR_PROVIDERS = [
+  "gmail",
+  "github",
+  "slack",
+  "discord",
+  "telegram",
+  "linear",
+  "jira",
+  "monday",
+  "s3",
+] as const;
+
+export const CONNECTOR_PRIVACY_MODES = ["strict", "balanced"] as const;

@@ -79,6 +79,13 @@ describe("PLAN_LIMITS", () => {
     expect(PLAN_LIMITS.pro.webhooks_enabled).toBe(true);
   });
 
+  it("connector step availability matches plan tiers", () => {
+    expect(PLAN_LIMITS.free.connectors_enabled).toBe(false);
+    expect(PLAN_LIMITS.starter.connectors_enabled).toBe(false);
+    expect(PLAN_LIMITS.pro.connectors_enabled).toBe(true);
+    expect(PLAN_LIMITS.enterprise.connectors_enabled).toBe(true);
+  });
+
   it("pro plan costs €49", () => {
     expect(PLAN_LIMITS.pro.price_cents).toBe(4900);
     expect(PLAN_LIMITS.pro.credits).toBe(8000);

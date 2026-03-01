@@ -21,6 +21,7 @@ type PlanLimitCode =
   | "PLAN_BYOK_REQUIRED"
   | "PLAN_CRON_DISABLED"
   | "PLAN_WEBHOOKS_DISABLED"
+  | "PLAN_CONNECTORS_DISABLED"
   | "PLAN_API_DISABLED";
 
 export class PlanValidationError extends Error {
@@ -273,6 +274,17 @@ export async function assertPipelineDefinitionWithinPlan(
     throw new PlanValidationError(
       "PLAN_WEBHOOKS_DISABLED",
       "Webhook delivery is not enabled for current plan",
+      { plan },
+    );
+  }
+
+  const hasConnectorStep = Boolean(
+    definition.steps?.some((step) => (step.type || "llm") === "connector"),
+  );
+  if (hasConnectorStep && !limits.connectors_enabled) {
+    throw new PlanValidationError(
+      "PLAN_CONNECTORS_DISABLED",
+      "Connector steps are available on Pro and Enterprise plans",
       { plan },
     );
   }

@@ -1,0 +1,21 @@
+{
+  "name": "@stepiq/connectors",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "rm -rf dist && tsc -b",
+    "start": "node dist/index.js",
+    "lint": "biome lint src",
+    "typecheck": "tsc -b",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "@stepiq/core": "*",
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
+}

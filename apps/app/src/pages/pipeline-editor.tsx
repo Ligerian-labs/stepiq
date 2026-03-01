@@ -16,6 +16,7 @@ import {
   type PipelineRecord,
   type RunRecord,
   type SecretRecord,
+  type UserMe,
   apiFetch,
 } from "../lib/api";
 
@@ -28,7 +29,36 @@ interface StepDef {
   outputFormat?: string;
   timeout?: number;
   retries?: number;
+  connector?: {
+    mode: "fetch" | "action";
+    provider: string;
+    authSecretName: string;
+    query: string;
+    action: string;
+    target: string;
+    payload: string;
+    idempotencyKey: string;
+    privacyMode: "strict" | "balanced";
+    maxItems?: number;
+    dryRun?: boolean;
+  };
 }
+
+type ConnectorStepState = NonNullable<StepDef["connector"]>;
+
+type ConnectorFetchPreset = {
+  id: string;
+  label: string;
+  build: () => Record<string, unknown>;
+};
+
+type ConnectorActionPreset = {
+  id: string;
+  label: string;
+  action: string;
+  target?: string;
+  buildPayload: () => Record<string, unknown>;
+};
 
 interface DefinitionStep {
   id?: string;
@@ -44,6 +74,19 @@ interface DefinitionStep {
   retry?: {
     max_attempts?: number;
     backoff_ms?: number;
+  };
+  connector?: {
+    mode?: "fetch" | "action";
+    provider?: string;
+    auth_secret_name?: string;
+    query?: Record<string, unknown>;
+    action?: string;
+    target?: string;
+    payload?: Record<string, unknown>;
+    idempotency_key?: string;
+    privacy_mode?: "strict" | "balanced";
+    max_items?: number;
+    dry_run?: boolean;
   };
 }
 
@@ -108,6 +151,519 @@ function newStep(index: number): StepDef {
   };
 }
 
+function defaultConnectorConfig(): ConnectorStepState {
+  return {
+    mode: "fetch",
+    provider: "gmail",
+    authSecretName: "",
+    query: JSON.stringify({}, null, 2),
+    action: "",
+    target: "",
+    payload: JSON.stringify({}, null, 2),
+    idempotencyKey: "",
+    privacyMode: "strict",
+    maxItems: 25,
+    dryRun: false,
+  };
+}
+
+function toUtcIso(date: Date): string {
+  return date.toISOString().replace(".000", "");
+}
+
+function utcDayRange(offsetDays: number): { since: string; until: string } {
+  const now = new Date();
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  start.setUTCDate(start.getUTCDate() + offsetDays);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { since: toUtcIso(start), until: toUtcIso(end) };
+}
+
+function connectorDefaultSecretName(provider: string): string {
+  if (provider === "gmail") return "GMAIL_ACCESS_TOKEN";
+  if (provider === "github") return "GITHUB_TOKEN";
+  if (provider === "discord") return "DISCORD_BOT_TOKEN";
+  if (provider === "slack") return "SLACK_BOT_TOKEN";
+  if (provider === "telegram") return "TELEGRAM_BOT_TOKEN";
+  if (provider === "jira") return "JIRA_API_TOKEN";
+  if (provider === "linear") return "LINEAR_API_KEY";
+  if (provider === "monday") return "MONDAY_API_TOKEN";
+  if (provider === "s3") return "S3_ACCESS_KEY";
+  return "";
+}
+
+function connectorFetchPresets(provider: string): ConnectorFetchPreset[] {
+  if (provider === "gmail") {
+    return [
+      {
+        id: "gmail_yesterday",
+        label: "Yesterday Inbox",
+        build: () => {
+          const range = utcDayRange(-1);
+          return {
+            since: range.since,
+            until: range.until,
+            max_items: 50,
+          };
+        },
+      },
+      {
+        id: "gmail_today_unread",
+        label: "Today Unread",
+        build: () => {
+          const range = utcDayRange(0);
+          return {
+            since: range.since,
+            until: range.until,
+            gmail_query: "is:unread",
+            max_items: 50,
+          };
+        },
+      },
+      {
+        id: "gmail_last7",
+        label: "Last 7 Days",
+        build: () => {
+          const now = new Date();
+          const since = new Date(now);
+          since.setUTCDate(since.getUTCDate() - 7);
+          return {
+            since: toUtcIso(since),
+            until: toUtcIso(now),
+            max_items: 200,
+          };
+        },
+      },
+    ];
+  }
+  if (provider === "discord") {
+    return [
+      {
+        id: "discord_latest_100",
+        label: "Latest 100 (Channel)",
+        build: () => ({
+          channel_id: "",
+          max_items: 100,
+        }),
+      },
+      {
+        id: "discord_latest_500",
+        label: "Latest 500 (Channel)",
+        build: () => ({
+          channel_id: "",
+          max_items: 500,
+        }),
+      },
+      {
+        id: "discord_before_cursor",
+        label: "Before Cursor",
+        build: () => ({
+          channel_id: "",
+          before: "",
+          max_items: 100,
+        }),
+      },
+    ];
+  }
+  if (provider === "slack") {
+    return [
+      {
+        id: "slack_latest_channel_messages",
+        label: "Channel Messages",
+        build: () => ({
+          channel_id: "",
+          max_items: 100,
+        }),
+      },
+      {
+        id: "slack_thread_replies",
+        label: "Thread Replies",
+        build: () => ({
+          channel_id: "",
+          thread_ts: "",
+          max_items: 100,
+        }),
+      },
+    ];
+  }
+  if (provider === "telegram") {
+    return [
+      {
+        id: "telegram_recent_updates",
+        label: "Recent Updates",
+        build: () => ({
+          offset: 0,
+          limit: 100,
+          timeout: 0,
+        }),
+      },
+      {
+        id: "telegram_chat_messages",
+        label: "Specific Chat",
+        build: () => ({
+          chat_id: "",
+          max_items: 100,
+        }),
+      },
+    ];
+  }
+  if (provider === "linear") {
+    return [
+      {
+        id: "linear_updated_issues",
+        label: "Updated Issues",
+        build: () => ({
+          team_id: "",
+          updated_since: toUtcIso(new Date(Date.now() - 24 * 60 * 60 * 1000)),
+          limit: 100,
+        }),
+      },
+      {
+        id: "linear_open_issues",
+        label: "Open Issues",
+        build: () => ({
+          team_id: "",
+          state: "unstarted",
+          limit: 100,
+        }),
+      },
+    ];
+  }
+  if (provider === "jira") {
+    return [
+      {
+        id: "jira_recent_updated",
+        label: "Recently Updated",
+        build: () => ({
+          project_key: "",
+          jql: "updated >= -1d ORDER BY updated DESC",
+          max_results: 100,
+        }),
+      },
+      {
+        id: "jira_open_bugs",
+        label: "Open Bugs",
+        build: () => ({
+          project_key: "",
+          jql: "issuetype = Bug AND statusCategory != Done ORDER BY priority DESC",
+          max_results: 100,
+        }),
+      },
+    ];
+  }
+  if (provider === "monday") {
+    return [
+      {
+        id: "monday_recent_items",
+        label: "Recent Items",
+        build: () => ({
+          board_id: "",
+          updated_since: toUtcIso(
+            new Date(Date.now() - 24 * 60 * 60 * 1000),
+          ),
+          limit: 100,
+        }),
+      },
+      {
+        id: "monday_group_items",
+        label: "Group Items",
+        build: () => ({
+          board_id: "",
+          group_id: "",
+          limit: 100,
+        }),
+      },
+    ];
+  }
+  if (provider === "s3") {
+    return [
+      {
+        id: "s3_prefix_recent",
+        label: "Prefix (Recent)",
+        build: () => ({
+          bucket: "",
+          prefix: "",
+          max_items: 200,
+        }),
+      },
+      {
+        id: "s3_modified_since",
+        label: "Modified Since",
+        build: () => ({
+          bucket: "",
+          prefix: "",
+          modified_since: toUtcIso(
+            new Date(Date.now() - 24 * 60 * 60 * 1000),
+          ),
+          max_items: 200,
+        }),
+      },
+    ];
+  }
+  if (provider === "github") {
+    return [
+      {
+        id: "github_recent_issues",
+        label: "Recent Issues",
+        build: () => ({
+          repo_owner: "",
+          repo_name: "",
+          type: "issues",
+          state: "open",
+          max_items: 100,
+        }),
+      },
+      {
+        id: "github_recent_pulls",
+        label: "Recent Pull Requests",
+        build: () => ({
+          repo_owner: "",
+          repo_name: "",
+          type: "pulls",
+          state: "open",
+          max_items: 100,
+        }),
+      },
+      {
+        id: "github_updated_since_24h",
+        label: "Updated Last 24h",
+        build: () => ({
+          repo_owner: "",
+          repo_name: "",
+          type: "issues",
+          state: "all",
+          since: toUtcIso(new Date(Date.now() - 24 * 60 * 60 * 1000)),
+          max_items: 100,
+        }),
+      },
+    ];
+  }
+  return [];
+}
+
+function connectorActionPresets(provider: string): ConnectorActionPreset[] {
+  if (provider === "slack") {
+    return [
+      {
+        id: "slack_post_message",
+        label: "Post Message",
+        action: "post_message",
+        target: "",
+        buildPayload: () => ({ text: "{{steps.step_1.output}}" }),
+      },
+      {
+        id: "slack_reply_thread",
+        label: "Reply Thread",
+        action: "reply_thread",
+        target: "",
+        buildPayload: () => ({ thread_ts: "", text: "{{steps.step_1.output}}" }),
+      },
+      {
+        id: "slack_upload_file",
+        label: "Upload File",
+        action: "upload_file",
+        target: "",
+        buildPayload: () => ({
+          filename: "report.txt",
+          content: "{{steps.step_1.output}}",
+        }),
+      },
+    ];
+  }
+  if (provider === "discord") {
+    return [
+      {
+        id: "discord_post_message",
+        label: "Post Message",
+        action: "post_message",
+        target: "",
+        buildPayload: () => ({ text: "{{steps.step_1.output}}" }),
+      },
+      {
+        id: "discord_reply",
+        label: "Reply Message",
+        action: "reply_message",
+        target: "",
+        buildPayload: () => ({ message_id: "", text: "{{steps.step_1.output}}" }),
+      },
+    ];
+  }
+  if (provider === "telegram") {
+    return [
+      {
+        id: "telegram_send_message",
+        label: "Send Message",
+        action: "send_message",
+        target: "",
+        buildPayload: () => ({ text: "{{steps.step_1.output}}" }),
+      },
+      {
+        id: "telegram_send_document",
+        label: "Send Document",
+        action: "send_document",
+        target: "",
+        buildPayload: () => ({ caption: "Pipeline output", file_url: "" }),
+      },
+    ];
+  }
+  if (provider === "linear") {
+    return [
+      {
+        id: "linear_create_issue",
+        label: "Create Issue",
+        action: "create_issue",
+        target: "",
+        buildPayload: () => ({
+          team_id: "",
+          title: "Pipeline issue",
+          description: "{{steps.step_1.output}}",
+        }),
+      },
+      {
+        id: "linear_comment_issue",
+        label: "Comment Issue",
+        action: "comment_issue",
+        target: "",
+        buildPayload: () => ({ issue_id: "", body: "{{steps.step_1.output}}" }),
+      },
+    ];
+  }
+  if (provider === "jira") {
+    return [
+      {
+        id: "jira_create_issue",
+        label: "Create Issue",
+        action: "create_issue",
+        target: "",
+        buildPayload: () => ({
+          project_key: "",
+          issue_type: "Task",
+          summary: "Pipeline issue",
+          description: "{{steps.step_1.output}}",
+        }),
+      },
+      {
+        id: "jira_comment_issue",
+        label: "Comment Issue",
+        action: "comment_issue",
+        target: "",
+        buildPayload: () => ({ issue_key: "", body: "{{steps.step_1.output}}" }),
+      },
+    ];
+  }
+  if (provider === "monday") {
+    return [
+      {
+        id: "monday_create_item",
+        label: "Create Item",
+        action: "create_item",
+        target: "",
+        buildPayload: () => ({
+          board_id: "",
+          item_name: "Pipeline item",
+          column_values: { text: "{{steps.step_1.output}}" },
+        }),
+      },
+      {
+        id: "monday_add_update",
+        label: "Add Update",
+        action: "add_update",
+        target: "",
+        buildPayload: () => ({ item_id: "", body: "{{steps.step_1.output}}" }),
+      },
+    ];
+  }
+  if (provider === "s3") {
+    return [
+      {
+        id: "s3_put_object",
+        label: "Put Object",
+        action: "put_object",
+        target: "",
+        buildPayload: () => ({
+          bucket: "",
+          key: "pipelines/output.txt",
+          content: "{{steps.step_1.output}}",
+        }),
+      },
+      {
+        id: "s3_copy_object",
+        label: "Copy Object",
+        action: "copy_object",
+        target: "",
+        buildPayload: () => ({
+          source_bucket: "",
+          source_key: "",
+          destination_bucket: "",
+          destination_key: "",
+        }),
+      },
+    ];
+  }
+  if (provider === "gmail") {
+    return [
+      {
+        id: "gmail_label_message",
+        label: "Label Message",
+        action: "label_message",
+        target: "",
+        buildPayload: () => ({ message_id: "", add_label_ids: ["IMPORTANT"] }),
+      },
+      {
+        id: "gmail_archive_message",
+        label: "Archive Message",
+        action: "archive_message",
+        target: "",
+        buildPayload: () => ({ message_id: "" }),
+      },
+    ];
+  }
+  if (provider === "github") {
+    return [
+      {
+        id: "github_create_issue",
+        label: "Create Issue",
+        action: "create_issue",
+        target: "",
+        buildPayload: () => ({
+          repo: "",
+          title: "Pipeline generated issue",
+          body: "{{steps.step_1.output}}",
+          labels: ["automation"],
+        }),
+      },
+      {
+        id: "github_comment_issue",
+        label: "Comment on Issue",
+        action: "comment_issue",
+        target: "",
+        buildPayload: () => ({
+          repo: "",
+          issue_number: 1,
+          body: "{{steps.step_1.output}}",
+        }),
+      },
+      {
+        id: "github_create_pr",
+        label: "Create Pull Request",
+        action: "create_pull_request",
+        target: "",
+        buildPayload: () => ({
+          repo: "",
+          title: "Automated PR",
+          head: "automation/changes",
+          base: "main",
+          body: "{{steps.step_1.output}}",
+        }),
+      },
+    ];
+  }
+  return [];
+}
+
 function normalizeOutboundWebhook(
   definition: unknown,
 ): OutboundWebhookConfig | null {
@@ -144,6 +700,23 @@ function areOutboundWebhookConfigsEqual(
     current.method === persisted.method &&
     current.signingSecretName.trim() === persisted.signingSecretName.trim()
   );
+}
+
+function parseJsonSafe(input: string, fallback: Record<string, unknown> = {}) {
+  try {
+    const parsed = JSON.parse(input);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function canUseConnectorSteps(plan: string | undefined): boolean {
+  const normalized = (plan || "").toLowerCase();
+  return normalized === "pro" || normalized === "enterprise";
 }
 
 export function PipelineEditorPage() {
@@ -196,6 +769,11 @@ export function PipelineEditorPage() {
   const [selectedPrevStepToken, setSelectedPrevStepToken] = useState<
     Record<number, string>
   >({});
+  const [selectedConnectorPreset, setSelectedConnectorPreset] = useState<
+    Record<number, string>
+  >({});
+  const [selectedConnectorActionPreset, setSelectedConnectorActionPreset] =
+    useState<Record<number, string>>({});
   const promptRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
 
   const modelOptions = (() => {
@@ -219,6 +797,11 @@ export function PipelineEditorPage() {
       apiFetch<SecretRecord[]>(`/api/pipelines/${pipelineId}/secrets`),
     enabled: Boolean(pipelineId),
   });
+  const meQ = useQuery({
+    queryKey: ["me"],
+    queryFn: () => apiFetch<UserMe>("/api/user/me"),
+  });
+  const connectorStepsEnabled = canUseConnectorSteps(meQ.data?.plan);
 
   // Load pipeline data
   useEffect(() => {
@@ -241,6 +824,22 @@ export function PipelineEditorPage() {
         outputFormat: s.output_format || s.outputFormat || "text",
         timeout: s.timeout_seconds ?? s.timeout ?? 30,
         retries: s.retry?.max_attempts ?? s.retries ?? 2,
+        connector:
+          s.type === "connector"
+            ? {
+                mode: s.connector?.mode || "fetch",
+                provider: s.connector?.provider || "gmail",
+                authSecretName: s.connector?.auth_secret_name || "",
+                query: JSON.stringify(s.connector?.query || {}, null, 2),
+                action: s.connector?.action || "",
+                target: s.connector?.target || "",
+                payload: JSON.stringify(s.connector?.payload || {}, null, 2),
+                idempotencyKey: s.connector?.idempotency_key || "",
+                privacyMode: s.connector?.privacy_mode || "strict",
+                maxItems: s.connector?.max_items ?? 25,
+                dryRun: s.connector?.dry_run ?? false,
+              }
+            : undefined,
       })),
     );
     const vars = def.variables ?? {};
@@ -284,19 +883,59 @@ export function PipelineEditorPage() {
     return {
       name,
       version: pipelineQ.data?.version ?? 1,
-      steps: steps.map((s) => ({
-        id: s.id,
-        name: s.name,
-        type: s.type,
-        model: s.model,
-        prompt: s.prompt,
-        output_format: s.outputFormat,
-        timeout_seconds: s.timeout,
-        retry: {
-          max_attempts: s.retries ?? 1,
-          backoff_ms: 1000,
-        },
-      })),
+      steps: steps.map((s) => {
+        if (s.type === "connector") {
+          const connector = s.connector || defaultConnectorConfig();
+          return {
+            id: s.id,
+            name: s.name,
+            type: "connector",
+            timeout_seconds: s.timeout,
+            retry: {
+              max_attempts: s.retries ?? 1,
+              backoff_ms: 1000,
+            },
+            connector: {
+              mode: connector.mode,
+              provider: connector.provider,
+              auth_secret_name: connector.authSecretName || undefined,
+              query: parseJsonSafe(connector.query),
+              action:
+                connector.mode === "action"
+                  ? connector.action || undefined
+                  : undefined,
+              target:
+                connector.mode === "action"
+                  ? connector.target || undefined
+                  : undefined,
+              payload:
+                connector.mode === "action"
+                  ? parseJsonSafe(connector.payload)
+                  : undefined,
+              idempotency_key:
+                connector.mode === "action"
+                  ? connector.idempotencyKey || undefined
+                  : undefined,
+              privacy_mode: connector.privacyMode,
+              max_items: connector.maxItems,
+              dry_run: connector.dryRun || false,
+            },
+          };
+        }
+        return {
+          id: s.id,
+          name: s.name,
+          type: s.type,
+          model: s.model,
+          prompt: s.prompt,
+          output_format: s.outputFormat,
+          timeout_seconds: s.timeout,
+          retry: {
+            max_attempts: s.retries ?? 1,
+            backoff_ms: 1000,
+          },
+        };
+      }),
       variables: Object.keys(vars).length > 0 ? vars : undefined,
       output: {
         from: outputFromStepId || steps[steps.length - 1]?.id || "",
@@ -336,6 +975,26 @@ export function PipelineEditorPage() {
   const updateStep = (idx: number, patch: Partial<StepDef>) => {
     setSteps((prev) =>
       prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)),
+    );
+  };
+
+  const updateConnectorStep = (
+    idx: number,
+    patch: Partial<ConnectorStepState>,
+  ) => {
+    setSteps((prev) =>
+      prev.map((s, i) =>
+        i === idx
+          ? (() => {
+              const nextConnector: ConnectorStepState = {
+                ...defaultConnectorConfig(),
+                ...(s.connector || {}),
+                ...patch,
+              };
+              return { ...s, connector: nextConnector };
+            })()
+          : s,
+      ),
     );
   };
 
@@ -897,7 +1556,9 @@ export function PipelineEditorPage() {
                       className="rounded-full bg-[var(--bg-inset)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)]"
                       style={{ fontFamily: "var(--font-mono)" }}
                     >
-                      {step.model}
+                      {step.type === "connector"
+                        ? `connector:${step.connector?.provider || "gmail"}`
+                        : step.model}
                     </span>
                     <span className="text-[var(--text-muted)]">
                       {isExpanded ? "▲" : "▼"}
@@ -909,8 +1570,8 @@ export function PipelineEditorPage() {
                 {isExpanded ? (
                   <div className="border-t border-[var(--divider)] px-5 pb-5 pt-4">
                     <div className="flex flex-col gap-4">
-                      {/* Name + Model row */}
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {/* Name + Type + Model row */}
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <label className="flex flex-col gap-1.5">
                           <span className="text-xs font-medium text-[var(--text-secondary)]">
                             Step Name
@@ -925,140 +1586,505 @@ export function PipelineEditorPage() {
                         </label>
                         <label className="flex flex-col gap-1.5">
                           <span className="text-xs font-medium text-[var(--text-secondary)]">
-                            Model
+                            Step Type
                           </span>
                           <select
                             className="w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3.5 py-2.5 text-[13px] focus:border-[var(--accent)] focus:outline-none"
                             style={{ fontFamily: "var(--font-mono)" }}
-                            value={step.model}
-                            onChange={(e) =>
-                              updateStep(idx, { model: e.target.value })
-                            }
+                            value={step.type}
+                            onChange={(e) => {
+                              const nextType = e.target.value;
+                              updateStep(idx, {
+                                type: nextType,
+                                connector:
+                                  nextType === "connector"
+                                    ? step.connector || defaultConnectorConfig()
+                                    : undefined,
+                              });
+                            }}
                           >
-                            {modelOptions.map((model) => (
-                              <option key={model.id} value={model.id}>
-                                {model.label}
-                              </option>
-                            ))}
+                            <option value="llm">llm</option>
+                            <option value="transform">transform</option>
+                            <option
+                              value="connector"
+                              disabled={!connectorStepsEnabled}
+                            >
+                              connector{connectorStepsEnabled ? "" : " (Pro+)"}
+                            </option>
                           </select>
                         </label>
+                        {step.type !== "connector" ? (
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-xs font-medium text-[var(--text-secondary)]">
+                              Model
+                            </span>
+                            <select
+                              className="w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3.5 py-2.5 text-[13px] focus:border-[var(--accent)] focus:outline-none"
+                              style={{ fontFamily: "var(--font-mono)" }}
+                              value={step.model}
+                              onChange={(e) =>
+                                updateStep(idx, { model: e.target.value })
+                              }
+                            >
+                              {modelOptions.map((model) => (
+                                <option key={model.id} value={model.id}>
+                                  {model.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : (
+                          <div className="rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3.5 py-2.5 text-xs text-[var(--text-secondary)]">
+                            Connector step executes via connectors gateway.
+                          </div>
+                        )}
                       </div>
 
-                      {/* Prompt */}
-                      <label className="flex flex-col gap-1.5">
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">
-                          Prompt
-                        </span>
-                        <textarea
-                          className="min-h-[100px] w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3.5 py-2.5 text-[13px] leading-relaxed focus:border-[var(--accent)] focus:outline-none"
-                          value={step.prompt}
-                          ref={(el) => {
-                            promptRefs.current[idx] = el;
-                          }}
-                          onChange={(e) =>
-                            updateStep(idx, { prompt: e.target.value })
-                          }
-                          placeholder="Enter the prompt for this step..."
-                        />
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              insertPromptToken(idx, "{{input.topic}}")
-                            }
-                            className="rounded border border-[var(--divider)] bg-[var(--bg-inset)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
-                          >
-                            + input.topic
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              insertPromptToken(idx, "{{vars.language}}")
-                            }
-                            className="rounded border border-[var(--divider)] bg-[var(--bg-inset)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
-                          >
-                            + vars.language
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              insertPromptToken(idx, "{{env.OPENAI_API_KEY}}")
-                            }
-                            className="rounded border border-[var(--divider)] bg-[var(--bg-inset)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
-                          >
-                            + env.OPENAI_API_KEY
-                          </button>
-                          {previousSteps.length > 0 && previousSteps.length <= 4
-                            ? previousSteps.map((prevStep, prevIdx) => (
-                                <button
-                                  key={`${prevStep.id}-token`}
-                                  type="button"
-                                  onClick={() =>
-                                    insertPromptToken(
-                                      idx,
-                                      `{{steps.${prevStep.id}.output}}`,
-                                    )
-                                  }
-                                  className="rounded border border-[var(--divider)] bg-[var(--bg-inset)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
-                                  title={`Also available: {{steps.${prevIdx + 1}.output}}`}
-                                >
-                                  + steps.{prevStep.id}.output
-                                </button>
-                              ))
-                            : null}
-                          {previousSteps.length > 4 ? (
-                            <div className="flex items-center gap-1.5">
-                              <select
-                                className="rounded border border-[var(--divider)] bg-[var(--bg-inset)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
-                                style={{ fontFamily: "var(--font-mono)" }}
-                                value={selectedPrevStepToken[idx] || ""}
-                                onChange={(e) =>
-                                  setSelectedPrevStepToken((prev) => ({
-                                    ...prev,
-                                    [idx]: e.target.value,
-                                  }))
-                                }
-                              >
-                                <option value="">Select step output...</option>
-                                {previousSteps.map((prevStep, prevIdx) => (
-                                  <option
-                                    key={`${prevStep.id}-token-option`}
-                                    value={`{{steps.${prevStep.id}.output}}`}
-                                  >
-                                    {`${prevIdx + 1}. ${prevStep.name || prevStep.id} (${prevStep.id})`}
-                                  </option>
-                                ))}
-                              </select>
+                      {step.type !== "connector" ? (
+                        <>
+                          {/* Prompt */}
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-xs font-medium text-[var(--text-secondary)]">
+                              Prompt
+                            </span>
+                            <textarea
+                              className="min-h-[100px] w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3.5 py-2.5 text-[13px] leading-relaxed focus:border-[var(--accent)] focus:outline-none"
+                              value={step.prompt}
+                              ref={(el) => {
+                                promptRefs.current[idx] = el;
+                              }}
+                              onChange={(e) =>
+                                updateStep(idx, { prompt: e.target.value })
+                              }
+                              placeholder="Enter the prompt for this step..."
+                            />
+                            <div className="flex flex-wrap items-center gap-1.5">
                               <button
                                 type="button"
-                                disabled={!selectedPrevStepToken[idx]}
                                 onClick={() =>
-                                  selectedPrevStepToken[idx] &&
+                                  insertPromptToken(idx, "{{input.topic}}")
+                                }
+                                className="rounded border border-[var(--divider)] bg-[var(--bg-inset)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
+                              >
+                                + input.topic
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  insertPromptToken(idx, "{{vars.language}}")
+                                }
+                                className="rounded border border-[var(--divider)] bg-[var(--bg-inset)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
+                              >
+                                + vars.language
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
                                   insertPromptToken(
                                     idx,
-                                    selectedPrevStepToken[idx],
+                                    "{{env.OPENAI_API_KEY}}",
                                   )
                                 }
-                                className="rounded border border-[var(--divider)] bg-[var(--bg-inset)] px-2 py-1 text-[11px] text-[var(--text-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
+                                className="rounded border border-[var(--divider)] bg-[var(--bg-inset)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
                               >
-                                + Insert step output
+                                + env.OPENAI_API_KEY
                               </button>
+                              {previousSteps.length > 0 &&
+                              previousSteps.length <= 4
+                                ? previousSteps.map((prevStep, prevIdx) => (
+                                    <button
+                                      key={`${prevStep.id}-token`}
+                                      type="button"
+                                      onClick={() =>
+                                        insertPromptToken(
+                                          idx,
+                                          `{{steps.${prevStep.id}.output}}`,
+                                        )
+                                      }
+                                      className="rounded border border-[var(--divider)] bg-[var(--bg-inset)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
+                                      title={`Also available: {{steps.${prevIdx + 1}.output}}`}
+                                    >
+                                      + steps.{prevStep.id}.output
+                                    </button>
+                                  ))
+                                : null}
+                              {previousSteps.length > 4 ? (
+                                <div className="flex items-center gap-1.5">
+                                  <select
+                                    className="rounded border border-[var(--divider)] bg-[var(--bg-inset)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
+                                    style={{ fontFamily: "var(--font-mono)" }}
+                                    value={selectedPrevStepToken[idx] || ""}
+                                    onChange={(e) =>
+                                      setSelectedPrevStepToken((prev) => ({
+                                        ...prev,
+                                        [idx]: e.target.value,
+                                      }))
+                                    }
+                                  >
+                                    <option value="">
+                                      Select step output...
+                                    </option>
+                                    {previousSteps.map((prevStep, prevIdx) => (
+                                      <option
+                                        key={`${prevStep.id}-token-option`}
+                                        value={`{{steps.${prevStep.id}.output}}`}
+                                      >
+                                        {`${prevIdx + 1}. ${prevStep.name || prevStep.id} (${prevStep.id})`}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    disabled={!selectedPrevStepToken[idx]}
+                                    onClick={() =>
+                                      selectedPrevStepToken[idx] &&
+                                      insertPromptToken(
+                                        idx,
+                                        selectedPrevStepToken[idx],
+                                      )
+                                    }
+                                    className="rounded border border-[var(--divider)] bg-[var(--bg-inset)] px-2 py-1 text-[11px] text-[var(--text-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    + Insert step output
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
+                            <p className="text-[11px] text-[var(--text-muted)]">
+                              Supports: <code>{"{{input.field}}"}</code>,{" "}
+                              <code>{"{{vars.name}}"}</code>,{" "}
+                              <code>{"{{steps.step_1.output}}"}</code>,{" "}
+                              <code>{"{{steps.1.output}}"}</code>,{" "}
+                              <code>{"{{env.OPENAI_API_KEY}}"}</code>.
+                            </p>
+                            {promptTemplateWarning ? (
+                              <p className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
+                                {promptTemplateWarning}
+                              </p>
+                            ) : null}
+                          </label>
+                        </>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          {!connectorStepsEnabled ? (
+                            <p className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 sm:col-span-2">
+                              Connector steps are available on Pro and
+                              Enterprise plans. Upgrade to use presets and
+                              external tool actions/fetches.
+                            </p>
                           ) : null}
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-xs font-medium text-[var(--text-secondary)]">
+                              Connector Mode
+                            </span>
+                            <select
+                              className="w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3 py-2 text-xs focus:border-[var(--accent)] focus:outline-none"
+                              style={{ fontFamily: "var(--font-mono)" }}
+                              value={step.connector?.mode || "fetch"}
+                              onChange={(e) => {
+                                updateConnectorStep(idx, {
+                                  mode: e.target.value as "fetch" | "action",
+                                });
+                                setSelectedConnectorPreset((prev) => ({
+                                  ...prev,
+                                  [idx]: "",
+                                }));
+                                setSelectedConnectorActionPreset((prev) => ({
+                                  ...prev,
+                                  [idx]: "",
+                                }));
+                              }}
+                            >
+                              <option value="fetch">fetch</option>
+                              <option value="action">action</option>
+                            </select>
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-xs font-medium text-[var(--text-secondary)]">
+                              Provider
+                            </span>
+                            <select
+                              className="w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3 py-2 text-xs focus:border-[var(--accent)] focus:outline-none"
+                              style={{ fontFamily: "var(--font-mono)" }}
+                              value={step.connector?.provider || "gmail"}
+                              onChange={(e) => {
+                                const nextProvider = e.target.value;
+                                updateConnectorStep(idx, {
+                                  provider: nextProvider,
+                                  authSecretName:
+                                    step.connector?.authSecretName ||
+                                    connectorDefaultSecretName(nextProvider),
+                                });
+                                setSelectedConnectorPreset((prev) => ({
+                                  ...prev,
+                                  [idx]: "",
+                                }));
+                                setSelectedConnectorActionPreset((prev) => ({
+                                  ...prev,
+                                  [idx]: "",
+                                }));
+                              }}
+                            >
+                              <option value="gmail">gmail</option>
+                              <option value="github">github</option>
+                              <option value="discord">discord</option>
+                              <option value="slack">slack</option>
+                              <option value="telegram">telegram</option>
+                              <option value="linear">linear</option>
+                              <option value="jira">jira</option>
+                              <option value="monday">monday</option>
+                              <option value="s3">s3</option>
+                            </select>
+                          </label>
+                          <label className="flex flex-col gap-1.5 sm:col-span-2">
+                            <span className="text-xs font-medium text-[var(--text-secondary)]">
+                              Auth Secret Name
+                            </span>
+                            <input
+                              className="w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3 py-2 text-xs focus:border-[var(--accent)] focus:outline-none"
+                              style={{ fontFamily: "var(--font-mono)" }}
+                              value={step.connector?.authSecretName || ""}
+                              onChange={(e) =>
+                                updateConnectorStep(idx, {
+                                  authSecretName: e.target.value
+                                    .trim()
+                                    .toUpperCase(),
+                                })
+                              }
+                              placeholder="GMAIL_ACCESS_TOKEN or DISCORD_BOT_TOKEN"
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1.5 sm:col-span-2">
+                            <span className="text-xs font-medium text-[var(--text-secondary)]">
+                              Fetch Query (JSON)
+                            </span>
+                            <textarea
+                              className="min-h-[90px] w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3 py-2 text-xs focus:border-[var(--accent)] focus:outline-none"
+                              style={{ fontFamily: "var(--font-mono)" }}
+                              value={step.connector?.query || "{}"}
+                              onChange={(e) =>
+                                updateConnectorStep(idx, {
+                                  query: e.target.value,
+                                })
+                              }
+                            />
+                            {(step.connector?.mode || "fetch") === "fetch" &&
+                            connectorFetchPresets(
+                              step.connector?.provider || "gmail",
+                            ).length > 0 ? (
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <select
+                                  className="rounded border border-[var(--divider)] bg-[var(--bg-surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
+                                  style={{ fontFamily: "var(--font-mono)" }}
+                                  value={selectedConnectorPreset[idx] || ""}
+                                  onChange={(e) =>
+                                    setSelectedConnectorPreset((prev) => ({
+                                      ...prev,
+                                      [idx]: e.target.value,
+                                    }))
+                                  }
+                                >
+                                  <option value="">Select preset...</option>
+                                  {connectorFetchPresets(
+                                    step.connector?.provider || "gmail",
+                                  ).map((preset) => (
+                                    <option key={preset.id} value={preset.id}>
+                                      {preset.label}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  className="rounded border border-[var(--divider)] bg-[var(--bg-surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
+                                  disabled={!selectedConnectorPreset[idx]}
+                                  onClick={() => {
+                                    const selected = connectorFetchPresets(
+                                      step.connector?.provider || "gmail",
+                                    ).find(
+                                      (preset) =>
+                                        preset.id ===
+                                        selectedConnectorPreset[idx],
+                                    );
+                                    if (!selected) return;
+                                    updateConnectorStep(idx, {
+                                      query: JSON.stringify(
+                                        selected.build(),
+                                        null,
+                                        2,
+                                      ),
+                                    });
+                                  }}
+                                >
+                                  Apply preset
+                                </button>
+                              </div>
+                            ) : null}
+                          </label>
+                          {(step.connector?.mode || "fetch") === "action" ? (
+                            <>
+                              {connectorActionPresets(
+                                step.connector?.provider || "gmail",
+                              ).length > 0 ? (
+                                <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+                                  <select
+                                    className="rounded border border-[var(--divider)] bg-[var(--bg-surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
+                                    style={{ fontFamily: "var(--font-mono)" }}
+                                    value={
+                                      selectedConnectorActionPreset[idx] || ""
+                                    }
+                                    onChange={(e) =>
+                                      setSelectedConnectorActionPreset(
+                                        (prev) => ({
+                                          ...prev,
+                                          [idx]: e.target.value,
+                                        }),
+                                      )
+                                    }
+                                  >
+                                    <option value="">Select action preset...</option>
+                                    {connectorActionPresets(
+                                      step.connector?.provider || "gmail",
+                                    ).map((preset) => (
+                                      <option key={preset.id} value={preset.id}>
+                                        {preset.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    className="rounded border border-[var(--divider)] bg-[var(--bg-surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
+                                    disabled={
+                                      !selectedConnectorActionPreset[idx]
+                                    }
+                                    onClick={() => {
+                                      const selected = connectorActionPresets(
+                                        step.connector?.provider || "gmail",
+                                      ).find(
+                                        (preset) =>
+                                          preset.id ===
+                                          selectedConnectorActionPreset[idx],
+                                      );
+                                      if (!selected) return;
+                                      updateConnectorStep(idx, {
+                                        action: selected.action,
+                                        target: selected.target || "",
+                                        payload: JSON.stringify(
+                                          selected.buildPayload(),
+                                          null,
+                                          2,
+                                        ),
+                                      });
+                                    }}
+                                  >
+                                    Apply action preset
+                                  </button>
+                                </div>
+                              ) : null}
+                              <label className="flex flex-col gap-1.5">
+                                <span className="text-xs font-medium text-[var(--text-secondary)]">
+                                  Action
+                                </span>
+                                <input
+                                  className="w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3 py-2 text-xs focus:border-[var(--accent)] focus:outline-none"
+                                  style={{ fontFamily: "var(--font-mono)" }}
+                                  value={step.connector?.action || ""}
+                                  onChange={(e) =>
+                                    updateConnectorStep(idx, {
+                                      action: e.target.value,
+                                    })
+                                  }
+                                  placeholder="post_message"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1.5">
+                                <span className="text-xs font-medium text-[var(--text-secondary)]">
+                                  Target
+                                </span>
+                                <input
+                                  className="w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3 py-2 text-xs focus:border-[var(--accent)] focus:outline-none"
+                                  style={{ fontFamily: "var(--font-mono)" }}
+                                  value={step.connector?.target || ""}
+                                  onChange={(e) =>
+                                    updateConnectorStep(idx, {
+                                      target: e.target.value,
+                                    })
+                                  }
+                                  placeholder="channel / issue / bucket"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1.5 sm:col-span-2">
+                                <span className="text-xs font-medium text-[var(--text-secondary)]">
+                                  Payload (JSON)
+                                </span>
+                                <textarea
+                                  className="min-h-[90px] w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3 py-2 text-xs focus:border-[var(--accent)] focus:outline-none"
+                                  style={{ fontFamily: "var(--font-mono)" }}
+                                  value={step.connector?.payload || "{}"}
+                                  onChange={(e) =>
+                                    updateConnectorStep(idx, {
+                                      payload: e.target.value,
+                                    })
+                                  }
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1.5">
+                                <span className="text-xs font-medium text-[var(--text-secondary)]">
+                                  Idempotency Key
+                                </span>
+                                <input
+                                  className="w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3 py-2 text-xs focus:border-[var(--accent)] focus:outline-none"
+                                  style={{ fontFamily: "var(--font-mono)" }}
+                                  value={step.connector?.idempotencyKey || ""}
+                                  onChange={(e) =>
+                                    updateConnectorStep(idx, {
+                                      idempotencyKey: e.target.value,
+                                    })
+                                  }
+                                  placeholder="{{input.request_id}}"
+                                />
+                              </label>
+                            </>
+                          ) : null}
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-xs font-medium text-[var(--text-secondary)]">
+                              Max Items
+                            </span>
+                            <input
+                              type="number"
+                              className="w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3 py-2 text-xs focus:border-[var(--accent)] focus:outline-none"
+                              style={{ fontFamily: "var(--font-mono)" }}
+                              value={step.connector?.maxItems ?? 25}
+                              min={1}
+                              max={1000}
+                              onChange={(e) =>
+                                updateConnectorStep(idx, {
+                                  maxItems: Number(e.target.value),
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-xs font-medium text-[var(--text-secondary)]">
+                              Privacy
+                            </span>
+                            <select
+                              className="w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3 py-2 text-xs focus:border-[var(--accent)] focus:outline-none"
+                              style={{ fontFamily: "var(--font-mono)" }}
+                              value={step.connector?.privacyMode || "strict"}
+                              onChange={(e) =>
+                                updateConnectorStep(idx, {
+                                  privacyMode: e.target.value as
+                                    | "strict"
+                                    | "balanced",
+                                })
+                              }
+                            >
+                              <option value="strict">strict</option>
+                              <option value="balanced">balanced</option>
+                            </select>
+                          </label>
                         </div>
-                        <p className="text-[11px] text-[var(--text-muted)]">
-                          Supports: <code>{"{{input.field}}"}</code>,{" "}
-                          <code>{"{{vars.name}}"}</code>,{" "}
-                          <code>{"{{steps.step_1.output}}"}</code>,{" "}
-                          <code>{"{{steps.1.output}}"}</code>,{" "}
-                          <code>{"{{env.OPENAI_API_KEY}}"}</code>.
-                        </p>
-                        {promptTemplateWarning ? (
-                          <p className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
-                            {promptTemplateWarning}
-                          </p>
-                        ) : null}
-                      </label>
+                      )}
 
                       {/* Config row — Output Format, Timeout, Retries */}
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -1070,6 +2096,7 @@ export function PipelineEditorPage() {
                             className="w-full rounded-[6px] border border-[var(--divider)] bg-[var(--bg-inset)] px-3 py-2 text-xs focus:border-[var(--accent)] focus:outline-none"
                             style={{ fontFamily: "var(--font-mono)" }}
                             value={step.outputFormat || "text"}
+                            disabled={step.type === "connector"}
                             onChange={(e) =>
                               updateStep(idx, { outputFormat: e.target.value })
                             }

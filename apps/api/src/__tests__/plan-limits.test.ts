@@ -415,4 +415,45 @@ describe("plan limit enforcement", () => {
     expect(body.valid).toBe(false);
     expect(body.code).toBe("PLAN_MAX_PIPELINES");
   });
+
+  it("blocks connector steps on starter plan", async () => {
+    state.user = {
+      id: "c0c0c0c0-d1d1-e2e2-f3f3-a4a4a4a4a4a4",
+      plan: "starter",
+      creditsRemaining: 100,
+    };
+    state.activePipelineCount = 0;
+    state.insertedPipelines = 0;
+    const headers = await authHeaders();
+
+    const res = await app.request("/api/pipelines", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: "connector-on-starter",
+        definition: {
+          name: "connector-on-starter",
+          version: 1,
+          steps: [
+            {
+              id: "s1",
+              name: "Fetch Gmail",
+              type: "connector",
+              connector: {
+                mode: "fetch",
+                provider: "gmail",
+                auth_secret_name: "GMAIL_ACCESS_TOKEN",
+                query: {},
+              },
+            },
+          ],
+        },
+      }),
+    });
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe("PLAN_CONNECTORS_DISABLED");
+    expect(state.insertedPipelines).toBe(0);
+  });
 });

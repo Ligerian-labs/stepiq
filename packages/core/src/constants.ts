@@ -123,6 +123,7 @@ export const PLAN_LIMITS: Record<
     max_steps_per_pipeline: number;
     cron_enabled: boolean;
     webhooks_enabled: boolean;
+    connectors_enabled: boolean;
     api_enabled: boolean;
     price_cents: number; // monthly price in cents
     overage_per_credit_cents: number;
@@ -135,6 +136,7 @@ export const PLAN_LIMITS: Record<
     max_steps_per_pipeline: 5,
     cron_enabled: false,
     webhooks_enabled: false,
+    connectors_enabled: false,
     api_enabled: false,
     price_cents: 0,
     overage_per_credit_cents: 0, // no overage, hard limit
@@ -146,6 +148,7 @@ export const PLAN_LIMITS: Record<
     max_steps_per_pipeline: 10,
     cron_enabled: true,
     webhooks_enabled: true,
+    connectors_enabled: false,
     api_enabled: true,
     price_cents: 1_900, // €19
     overage_per_credit_cents: 1, // €0.01/credit
@@ -157,6 +160,7 @@ export const PLAN_LIMITS: Record<
     max_steps_per_pipeline: 20,
     cron_enabled: true,
     webhooks_enabled: true,
+    connectors_enabled: true,
     api_enabled: true,
     price_cents: 4_900, // €49
     overage_per_credit_cents: 0.8, // €0.008/credit
@@ -168,6 +172,7 @@ export const PLAN_LIMITS: Record<
     max_steps_per_pipeline: 50,
     cron_enabled: true,
     webhooks_enabled: true,
+    connectors_enabled: true,
     api_enabled: true,
     price_cents: 0, // custom
     overage_per_credit_cents: 0,

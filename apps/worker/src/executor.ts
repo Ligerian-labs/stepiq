@@ -1,17 +1,22 @@
+import type { ConnectorProvider } from "@stepiq/core";
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import Handlebars from "handlebars";
 import postgres from "postgres";
 import { serverTrack } from "./analytics.js";
 import {
+  deliverConnectorActionWithRetry,
+  deliverConnectorFetchWithRetry,
+} from "./connector-delivery.js";
+import {
   PLAN_LIMITS,
-  type Plan,
   type PipelineDefinition,
+  type Plan,
   type RunFundingMode,
-  providerSecretNames,
   TOKENS_PER_CREDIT,
   createKmsProvider,
   decryptSecret,
+  providerSecretNames,
   redactSecrets,
 } from "./core-adapter.js";
 import {
@@ -28,6 +33,20 @@ const dbUrl =
   process.env.DATABASE_URL || "postgres://stepiq:stepiq@localhost:5432/stepiq";
 const client = postgres(dbUrl);
 const db = drizzle(client);
+
+type ConnectorStepConfigLike = {
+  mode?: "fetch" | "action";
+  provider?: ConnectorProvider;
+  query?: Record<string, unknown>;
+  action?: string;
+  target?: string;
+  payload?: Record<string, unknown>;
+  auth_secret_name?: string;
+  idempotency_key?: string;
+  privacy_mode?: "strict" | "balanced";
+  max_items?: number;
+  dry_run?: boolean;
+};
 
 function isMissingPipelineIdColumnError(error: unknown): boolean {
   const message =
@@ -80,6 +99,15 @@ export async function executePipeline(runId: string) {
     .limit(1);
   const definition = version?.definition as unknown as PipelineDefinition;
   if (!definition) throw new Error("Pipeline definition not found");
+  if (
+    definition.output?.deliver?.some(
+      (target) => (target as { type?: string }).type === "connector",
+    )
+  ) {
+    throw new Error(
+      "Legacy output.deliver connector targets are no longer supported. Use connector steps in definition.steps.",
+    );
+  }
 
   const runStartedAt = new Date();
   await db
@@ -101,7 +129,8 @@ export async function executePipeline(runId: string) {
   let totalTokens = 0;
   let totalCostCents = 0;
   let creditsDeducted = false;
-  const rawFundingMode = ((run.fundingMode || "legacy") as RunFundingMode) || "legacy";
+  const rawFundingMode =
+    ((run.fundingMode || "legacy") as RunFundingMode) || "legacy";
   const fundingMode: RunFundingMode =
     rawFundingMode === "legacy" &&
     (runUser?.plan === "starter" || runUser?.plan === "pro") &&
@@ -120,7 +149,7 @@ export async function executePipeline(runId: string) {
       run.pipelineId,
       definition,
       db,
-      getOutputSigningSecretNames(definition),
+      getRequiredSecretNames(definition),
       {
         includeProviderSecrets: fundingMode !== "app_credits",
       },
@@ -147,7 +176,7 @@ export async function executePipeline(runId: string) {
 
       try {
         const prompt = step.prompt ? interpolate(step.prompt, context) : "";
-        const stepType = step.type || "llm";
+        const stepType = (step.type || "llm") as string;
         const startTime = Date.now();
 
         let rawOutput = "";
@@ -204,6 +233,20 @@ export async function executePipeline(runId: string) {
         } else if (stepType === "transform") {
           rawOutput = prompt;
           parsedOutput = prompt;
+        } else if (stepType === "connector") {
+          const result = await executeConnectorStep({
+            runId,
+            stepId: step.id,
+            stepIndex: i,
+            connectorConfig: (
+              step as unknown as { connector?: ConnectorStepConfigLike }
+            ).connector,
+            prompt,
+            context,
+            envValues: envSecrets.values,
+          });
+          rawOutput = result.rawOutput;
+          parsedOutput = result.parsedOutput;
         } else {
           throw new Error(`Step type "${stepType}" is not implemented`);
         }
@@ -348,10 +391,7 @@ async function deductRunCredits(
   fundingMode: RunFundingMode,
 ) {
   if (fundingMode === "byok_required") {
-    await db
-      .update(runs)
-      .set({ creditsDeducted: 0 })
-      .where(eq(runs.id, runId));
+    await db.update(runs).set({ creditsDeducted: 0 }).where(eq(runs.id, runId));
     return;
   }
 
@@ -364,19 +404,13 @@ async function deductRunCredits(
 
   const plan = (user.plan in PLAN_LIMITS ? user.plan : "free") as Plan;
   let creditsToDeduct = creditsFromTokens(totalTokens);
-  if (
-    fundingMode === "app_credits" &&
-    (plan === "starter" || plan === "pro")
-  ) {
+  if (fundingMode === "app_credits" && (plan === "starter" || plan === "pro")) {
     const rate = PLAN_LIMITS[plan].overage_per_credit_cents;
     creditsToDeduct =
       totalCostCents > 0 && rate > 0 ? Math.ceil(totalCostCents / rate) : 0;
   }
   if (creditsToDeduct <= 0) {
-    await db
-      .update(runs)
-      .set({ creditsDeducted: 0 })
-      .where(eq(runs.id, runId));
+    await db.update(runs).set({ creditsDeducted: 0 }).where(eq(runs.id, runId));
     return;
   }
 
@@ -427,11 +461,7 @@ async function resolveUserSecrets(
     ? refs.map((r) => r.match(/\{\{env\.(\w+)\}\}/)?.[1]).filter(Boolean)
     : [];
   const names = [
-      ...new Set([
-      ...providerNames,
-      ...referencedNames,
-      ...additionalNames,
-    ]),
+    ...new Set([...providerNames, ...referencedNames, ...additionalNames]),
   ] as string[];
   if (names.length === 0) return { values: {}, plainValues: [] };
 
@@ -507,14 +537,183 @@ async function resolveUserSecrets(
   return { values, plainValues };
 }
 
-function getOutputSigningSecretNames(definition: PipelineDefinition): string[] {
-  return (definition.output?.deliver || [])
-    .filter((delivery) => delivery.type === "webhook")
-    .map((delivery) => {
-      const raw = (delivery as Record<string, unknown>).signing_secret_name;
-      return typeof raw === "string" ? raw : undefined;
-    })
-    .filter((name): name is string => Boolean(name));
+function getRequiredSecretNames(definition: PipelineDefinition): string[] {
+  const names: string[] = [];
+  for (const delivery of definition.output?.deliver || []) {
+    if (delivery.type === "webhook") {
+      const signingRaw = (delivery as Record<string, unknown>)
+        .signing_secret_name;
+      if (typeof signingRaw === "string" && signingRaw.length > 0) {
+        names.push(signingRaw);
+      }
+    }
+  }
+  for (const step of definition.steps || []) {
+    if ((step.type || "llm") !== "connector") continue;
+    const connector = (
+      step as unknown as { connector?: ConnectorStepConfigLike }
+    ).connector;
+    if (
+      connector?.auth_secret_name &&
+      typeof connector.auth_secret_name === "string" &&
+      connector.auth_secret_name.length > 0
+    ) {
+      names.push(connector.auth_secret_name);
+    }
+  }
+  return Array.from(new Set(names));
+}
+
+function interpolateUnknown(
+  value: unknown,
+  context: Record<string, unknown>,
+): unknown {
+  if (typeof value === "string") return interpolate(value, context);
+  if (Array.isArray(value)) {
+    return value.map((entry) => interpolateUnknown(entry, context));
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, innerValue] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
+      out[key] = interpolateUnknown(innerValue, context);
+    }
+    return out;
+  }
+  return value;
+}
+
+function resolveConnectorAuth(
+  provider: ConnectorProvider,
+  token: string,
+): { access_token?: string; bot_token?: string } {
+  if (provider === "gmail") return { access_token: token };
+  if (provider === "discord") return { bot_token: token };
+  return { access_token: token };
+}
+
+async function executeConnectorStep(params: {
+  runId: string;
+  stepId: string;
+  stepIndex: number;
+  connectorConfig?: ConnectorStepConfigLike;
+  prompt: string;
+  context: Record<string, unknown>;
+  envValues: Record<string, string>;
+}): Promise<{ rawOutput: string; parsedOutput: unknown }> {
+  const config = params.connectorConfig;
+  if (!config) {
+    throw new Error(
+      `Connector step "${params.stepId}" has no connector config`,
+    );
+  }
+  const provider = config.provider;
+  const mode = config.mode;
+  if (!provider) {
+    throw new Error(`Connector step "${params.stepId}" is missing provider`);
+  }
+  if (!mode) {
+    throw new Error(`Connector step "${params.stepId}" is missing mode`);
+  }
+  const authSecretName = config.auth_secret_name;
+  if (!authSecretName) {
+    throw new Error(
+      `Connector step "${params.stepId}" is missing auth_secret_name`,
+    );
+  }
+  const providerToken = params.envValues[authSecretName];
+  if (!providerToken) {
+    throw new Error(
+      `Connector step "${params.stepId}" secret "${authSecretName}" not found`,
+    );
+  }
+
+  const gatewayUrl =
+    process.env.CONNECTORS_GATEWAY_URL || "http://localhost:3002";
+  const gatewayApiKey = process.env.CONNECTORS_GATEWAY_API_KEY || undefined;
+
+  if (mode === "fetch") {
+    const query = interpolateUnknown(
+      config.query || {},
+      params.context,
+    ) as Record<string, unknown>;
+    if (typeof config.max_items === "number" && config.max_items > 0) {
+      query.max_items = config.max_items;
+    }
+    const fetchResult = await deliverConnectorFetchWithRetry({
+      gatewayUrl,
+      gatewayApiKey,
+      request: {
+        provider,
+        query,
+        auth: resolveConnectorAuth(provider, providerToken),
+        dry_run: config.dry_run || false,
+      },
+    });
+    const lastAttempt = fetchResult.attempts[fetchResult.attempts.length - 1];
+    if (!lastAttempt?.ok) {
+      throw new Error(
+        `Connector fetch failed for ${provider} after ${fetchResult.attempts.length} attempt(s)`,
+      );
+    }
+    const parsedOutput =
+      fetchResult.responseBody && typeof fetchResult.responseBody === "object"
+        ? fetchResult.responseBody
+        : { provider, mode: "fetch", items: [] };
+    return {
+      rawOutput: JSON.stringify(parsedOutput),
+      parsedOutput,
+    };
+  }
+
+  if (mode === "action") {
+    const payload = interpolateUnknown(
+      config.payload || { prompt: params.prompt },
+      params.context,
+    ) as Record<string, unknown>;
+    const idempotencyKey = (
+      config.idempotency_key
+        ? interpolate(config.idempotency_key, params.context)
+        : `${params.runId}:${params.stepId}:${params.stepIndex + 1}:${provider}:${config.action || "action"}`
+    ).slice(0, 200);
+    const attempts = await deliverConnectorActionWithRetry({
+      gatewayUrl,
+      gatewayApiKey,
+      providerToken,
+      request: {
+        provider,
+        action: config.action || "action",
+        target: config.target
+          ? interpolate(config.target, params.context)
+          : undefined,
+        payload,
+        idempotency_key: idempotencyKey,
+        privacy_mode: config.privacy_mode || "strict",
+        dry_run: config.dry_run || false,
+      },
+    });
+    const lastAttempt = attempts[attempts.length - 1];
+    if (!lastAttempt?.ok) {
+      throw new Error(
+        `Connector action failed for ${provider}/${config.action || "action"} after ${attempts.length} attempt(s)`,
+      );
+    }
+    const parsedOutput = {
+      provider,
+      mode: "action",
+      action: config.action || "action",
+      target: config.target || null,
+      idempotency_key: idempotencyKey,
+      attempts,
+    };
+    return {
+      rawOutput: JSON.stringify(parsedOutput),
+      parsedOutput,
+    };
+  }
+
+  throw new Error(`Unsupported connector mode "${mode}"`);
 }
 
 async function deliverOutputWebhooks(params: {

@@ -16,6 +16,7 @@
     { "path": "packages/core" },
     { "path": "packages/ui" },
     { "path": "apps/api" },
+    { "path": "apps/connectors" },
     { "path": "apps/landing" },
     { "path": "apps/app" },
     { "path": "apps/worker" }

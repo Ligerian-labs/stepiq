@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  connectorActionRequestSchema,
   createApiKeySchema,
   createPipelineSchema,
   createScheduleSchema,
@@ -11,6 +12,7 @@ import {
   pipelineStepSchema,
   registerSchema,
   runPipelineSchema,
+  sanitizedToolEventSchema,
   secretNameParam,
   updateSecretSchema,
   uuidParam,
@@ -103,6 +105,7 @@ describe("pipelineStepSchema", () => {
   it("accepts all valid step types", () => {
     const types = [
       "llm",
+      "connector",
       "transform",
       "condition",
       "parallel",
@@ -111,13 +114,30 @@ describe("pipelineStepSchema", () => {
       "code",
     ];
     for (const type of types) {
-      const result = pipelineStepSchema.safeParse({
+      const base = {
         id: "s1",
         name: "S",
         type,
-      });
+      } as Record<string, unknown>;
+      if (type === "connector") {
+        base.connector = {
+          mode: "fetch",
+          provider: "gmail",
+          auth_secret_name: "GMAIL_ACCESS_TOKEN",
+        };
+      }
+      const result = pipelineStepSchema.safeParse(base);
       expect(result.success).toBe(true);
     }
+  });
+
+  it("rejects connector step without connector config", () => {
+    const result = pipelineStepSchema.safeParse({
+      id: "s1",
+      name: "S",
+      type: "connector",
+    });
+    expect(result.success).toBe(false);
   });
 
   it("accepts retry config", () => {
@@ -181,6 +201,67 @@ describe("pipelineDefinitionSchema", () => {
           },
         ],
       },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects connector output delivery config", () => {
+    const result = pipelineDefinitionSchema.safeParse({
+      name: "Connector Test",
+      version: 1,
+      steps: [{ id: "s1", name: "S1" }],
+      output: {
+        from: "s1",
+        deliver: [
+          {
+            type: "connector",
+            provider: "slack",
+            action: "post_message",
+            target: "C123",
+            payload: { text: "Done" },
+            idempotency_key: "run:1:slack:post_message",
+            privacy_mode: "strict",
+          },
+        ],
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("connector schemas", () => {
+  it("accepts sanitized tool event", () => {
+    const result = sanitizedToolEventSchema.safeParse({
+      event_id: "evt_1",
+      occurred_at: "2026-01-01T00:00:00.000Z",
+      source: "slack",
+      event_type: "message.created",
+      dedupe_key: "slack:evt_1",
+      trace_id: "trace_1",
+      text_clean: "hello [REDACTED]",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts connector action request", () => {
+    const result = connectorActionRequestSchema.safeParse({
+      provider: "discord",
+      action: "post_message",
+      target: "channel_123",
+      payload: { text: "hello" },
+      idempotency_key: "run_1:step_3",
+      privacy_mode: "strict",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts github connector action request", () => {
+    const result = connectorActionRequestSchema.safeParse({
+      provider: "github",
+      action: "create_issue",
+      payload: { repo: "owner/repo", title: "Bug report" },
+      idempotency_key: "run_1:step_4",
+      privacy_mode: "strict",
     });
     expect(result.success).toBe(true);
   });

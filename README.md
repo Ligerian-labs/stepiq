@@ -11,6 +11,7 @@ Monorepo with runtime apps and reusable packages:
 | Path | Description | Tech |
 |------|-------------|------|
 | `apps/api` | REST API server | Hono, Drizzle, PostgreSQL |
+| `apps/connectors` | Privacy gateway for bidirectional connectors | Hono |
 | `apps/worker` | Pipeline executor + cron scheduler | BullMQ, Redis |
 | `apps/landing` | Marketing website | Astro 5, Tailwind |
 | `apps/app` | Product web app | React, Vite, TanStack Router + Query |
@@ -41,6 +42,8 @@ CLERK_API_URL=https://api.clerk.com
 STEPIQ_MASTER_KEY=
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
+GEMINI_API_KEY=
+MISTRAL_API_KEY=
 RESEND_API_KEY=
 EMAIL_FROM=
 STRIPE_SECRET_KEY=
@@ -55,6 +58,14 @@ CORS_ORIGIN=http://localhost:5173
 PUBLIC_API_URL=http://localhost:3001
 VITE_API_URL=http://localhost:3001
 VITE_CLERK_PUBLISHABLE_KEY=
+CONNECTORS_PORT=3002
+CONNECTORS_INGEST_TOKEN=
+CONNECTORS_GATEWAY_API_KEY=
+CONNECTORS_STEPIQ_URL=http://localhost:3001
+CONNECTORS_STEPIQ_API_KEY=
+CONNECTORS_RAW_ENCRYPTION_KEY=
+CONNECTORS_RAW_RETENTION_DAYS=7
+CONNECTORS_GATEWAY_URL=http://localhost:3002
 ```
 
 ### 2. Start local infra
@@ -71,7 +82,7 @@ set -a; source .env; set +a
 bun run db:migrate
 ```
 
-### 4. Start services (4 terminals)
+### 4. Start services (5 terminals)
 
 Terminal A (API):
 
@@ -87,14 +98,21 @@ set -a; source .env; set +a
 bun run --filter @stepiq/worker dev
 ```
 
-Terminal C (App):
+Terminal C (Connectors):
+
+```bash
+set -a; source .env; set +a
+bun run --filter @stepiq/connectors dev
+```
+
+Terminal D (App):
 
 ```bash
 set -a; source .env; set +a
 bun run --filter @stepiq/app dev
 ```
 
-Terminal D (Landing):
+Terminal E (Landing):
 
 ```bash
 set -a; source .env; set +a
@@ -105,6 +123,7 @@ Services:
 - **Landing:** http://localhost:4321
 - **App:** http://localhost:5173
 - **API:** http://localhost:3001
+- **Connectors:** http://localhost:3002
 - **API Health:** http://localhost:3001/health
 
 ### 5. Verify
@@ -131,6 +150,7 @@ docker compose -f compose.yaml down
 stepiq/
 ├── apps/
 │   ├── api/          # Hono REST API
+│   ├── connectors/   # Connector privacy gateway (inbound + outbound)
 │   ├── worker/       # BullMQ workers + cron scheduler
 │   ├── landing/      # Astro landing pages
 │   └── app/          # React + Vite + TanStack product app
@@ -164,6 +184,11 @@ See [full spec](https://github.com/Ligerian-labs/brainstorm/blob/main/products/a
 - `GET /api/user/api-keys` - List API keys
 - `POST /api/user/api-keys` - Create API key
 - `DELETE /api/user/api-keys/:id` - Revoke API key
+
+### Connectors gateway endpoints
+
+- `POST /inbound/:provider/:pipelineId` - Ingest provider event, sanitize, and trigger Stepiq webhook
+- `POST /actions/execute` - Execute validated outbound connector action
 
 ### Inbound webhook trigger example
 

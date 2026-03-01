@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  CONNECTOR_PRIVACY_MODES,
+  CONNECTOR_PROVIDERS,
   OUTPUT_FORMATS,
   PIPELINE_STATUSES,
   RUN_STATUSES,
@@ -19,25 +21,70 @@ export const stepConditionSchema = z.object({
   max_loops: z.number().int().min(1).max(10).optional(),
 });
 
-export const pipelineStepSchema = z.object({
-  id: z
-    .string()
-    .regex(
-      /^[a-z0-9_]+$/,
-      "Step ID must be lowercase alphanumeric with underscores",
-    ),
-  name: z.string().min(1).max(100),
-  type: z.enum(STEP_TYPES).default("llm"),
-  model: z.string().optional(),
-  prompt: z.string().optional(),
-  system_prompt: z.string().optional(),
-  temperature: z.number().min(0).max(2).optional(),
-  max_tokens: z.number().int().min(1).optional(),
-  output_format: z.enum(OUTPUT_FORMATS).default("text"),
-  timeout_seconds: z.number().int().min(1).max(300).default(60),
-  retry: stepRetrySchema.optional(),
-  on_condition: z.array(stepConditionSchema).optional(),
+export const connectorProviderSchema = z.enum(CONNECTOR_PROVIDERS);
+
+export const connectorPrivacyModeSchema = z.enum(CONNECTOR_PRIVACY_MODES);
+
+export const connectorStepConfigSchema = z.object({
+  mode: z.enum(["fetch", "action"]),
+  provider: connectorProviderSchema,
+  query: z.record(z.unknown()).optional(),
+  action: z.string().trim().min(1).max(120).optional(),
+  target: z.string().trim().min(1).max(500).optional(),
+  payload: z.record(z.unknown()).optional(),
+  auth_secret_name: z.string().trim().min(1).max(100).optional(),
+  idempotency_key: z.string().trim().min(1).max(200).optional(),
+  privacy_mode: connectorPrivacyModeSchema.default("strict"),
+  max_items: z.number().int().min(1).max(1000).optional(),
+  dry_run: z.boolean().optional(),
 });
+
+export const pipelineStepSchema = z
+  .object({
+    id: z
+      .string()
+      .regex(
+        /^[a-z0-9_]+$/,
+        "Step ID must be lowercase alphanumeric with underscores",
+      ),
+    name: z.string().min(1).max(100),
+    type: z.enum(STEP_TYPES).default("llm"),
+    model: z.string().optional(),
+    prompt: z.string().optional(),
+    system_prompt: z.string().optional(),
+    temperature: z.number().min(0).max(2).optional(),
+    max_tokens: z.number().int().min(1).optional(),
+    output_format: z.enum(OUTPUT_FORMATS).default("text"),
+    timeout_seconds: z.number().int().min(1).max(300).default(60),
+    retry: stepRetrySchema.optional(),
+    on_condition: z.array(stepConditionSchema).optional(),
+    connector: connectorStepConfigSchema.optional(),
+  })
+  .superRefine((step, ctx) => {
+    if (step.type !== "connector") return;
+    if (!step.connector) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["connector"],
+        message: 'Connector step requires "connector" configuration',
+      });
+      return;
+    }
+    if (!step.connector.auth_secret_name) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["connector", "auth_secret_name"],
+        message: "Connector step requires auth_secret_name",
+      });
+    }
+    if (step.connector.mode === "action" && !step.connector.action) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["connector", "action"],
+        message: "Connector action step requires action",
+      });
+    }
+  });
 
 // ── Pipeline Definition Schema ──
 
@@ -48,15 +95,25 @@ export const variableSchema = z.object({
   default: z.unknown().optional(),
 });
 
-export const deliveryTargetSchema = z.object({
-  type: z.enum(["webhook", "email", "file"]),
-  url: z.string().url().optional(),
-  method: z.enum(["GET", "POST", "PUT"]).optional(),
-  signing_secret_name: z.string().min(1).max(100).optional(),
-  to: z.string().email().optional(),
-  subject: z.string().optional(),
-  path: z.string().optional(),
-});
+export const deliveryTargetSchema = z
+  .object({
+    type: z.enum(["webhook", "email", "file"]),
+    url: z.string().url().optional(),
+    method: z.enum(["GET", "POST", "PUT"]).optional(),
+    signing_secret_name: z.string().min(1).max(100).optional(),
+    to: z.string().email().optional(),
+    subject: z.string().optional(),
+    path: z.string().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.type === "webhook" && !value.url) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["url"],
+        message: "Webhook delivery requires url",
+      });
+    }
+  });
 
 export const scheduleSchema = z.object({
   enabled: z.boolean().default(true),
@@ -120,10 +177,7 @@ export const createScheduleSchema = z.object({
   cron_expression: z
     .string()
     .trim()
-    .regex(
-      /^(\S+\s+){4}\S+$/,
-      "Cron expression must have exactly 5 fields",
-    ),
+    .regex(/^(\S+\s+){4}\S+$/, "Cron expression must have exactly 5 fields"),
   timezone: z
     .string()
     .trim()
@@ -197,6 +251,37 @@ export const webhookTriggerSchema = z
     input_data: z.record(z.unknown()).optional(),
   })
   .passthrough();
+
+// ── Connector Schemas ──
+
+export const sanitizedToolEventSchema = z.object({
+  event_id: z.string().min(1).max(200),
+  occurred_at: z.string().datetime(),
+  source: connectorProviderSchema,
+  workspace_id: z.string().min(1).max(200).optional(),
+  actor_id_hash: z.string().min(1).max(200).optional(),
+  channel_or_project_ref: z.string().min(1).max(300).optional(),
+  event_type: z.string().min(1).max(120),
+  text_clean: z.string().max(10_000).optional(),
+  entities: z.record(z.unknown()).default({}),
+  risk_flags: z.record(z.boolean()).default({}),
+  raw_ref: z.string().max(500).optional(),
+  dedupe_key: z.string().min(1).max(200),
+  trace_id: z.string().min(1).max(200),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+export const connectorActionRequestSchema = z.object({
+  provider: connectorProviderSchema,
+  action: z.string().trim().min(1).max(120),
+  target: z.string().trim().min(1).max(500).optional(),
+  payload: z.record(z.unknown()).default({}),
+  idempotency_key: z.string().trim().min(1).max(200),
+  privacy_mode: connectorPrivacyModeSchema.default("strict"),
+  auth_secret_name: z.string().trim().min(1).max(100).optional(),
+  dry_run: z.boolean().default(false),
+  trace_id: z.string().trim().min(1).max(200).optional(),
+});
 
 // ── API Key Schemas ──
 
