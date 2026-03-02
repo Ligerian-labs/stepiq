@@ -18,17 +18,18 @@ Current implementation includes:
 - optional encrypted short-retention raw payload references
 - retry-capable worker client integration on outbound path
 - in-memory idempotency cache for outbound actions
-- source-side pull fetch for Gmail, Discord, and GitHub
+- source-side pull fetch for Gmail, Discord, and GitHub via `@stepiq/connector-provider`
 
-Provider execution in `src/providers.ts` is currently a structured stub layer. It returns normalized success payloads and is designed to be replaced with real provider SDK/API calls.
+Provider execution now lives in `packages/connector-provider`, with one directory per provider and a shared adapter contract.
 
 ## Directory Overview
 
 - `src/index.ts`: process entrypoint and HTTP server bootstrap
 - `src/app.ts`: route handlers and auth checks
 - `src/policy.ts`: privacy controls (redaction, risk flags, raw payload encryption helper)
-- `src/fetchers.ts`: provider pull-based inbound fetch implementations
-- `src/providers.ts`: outbound provider action execution abstraction
+- `packages/connector-provider/src/contracts.ts`: provider adapter contract
+- `packages/connector-provider/src/registry.ts`: provider registry/resolver
+- `packages/connector-provider/src/providers/*`: provider implementations (fetch + action)
 
 ## Architecture
 
@@ -66,7 +67,7 @@ Provider execution in `src/providers.ts` is currently a structured stub layer. I
    - key: `idempotency_key`
    - cache: in-memory map
    - TTL: 10 minutes
-6. Execute provider action through `executeProviderAction`.
+6. Execute provider action through the provider adapter (`buildPayload` + `callTool`).
 7. Return normalized response payload.
 
 ## Supported Providers
@@ -460,7 +461,7 @@ To add real provider execution:
 
 1. Keep request validation in `connectorActionRequestSchema`.
 2. Add provider-specific action schema refinement if needed.
-3. Replace branch in `executeProviderAction` with actual API/SDK call.
+3. Replace capability handling in the provider adapter `callTool` with actual API/SDK call.
 4. Map provider response to normalized `ConnectorActionResult`.
 5. Add idempotency support per provider if available (headers/body fields).
 6. Add adapter tests for:
@@ -473,7 +474,7 @@ For inbound providers:
 1. Normalize payload in `sanitizeInboundEvent`.
 2. Avoid adding raw fields to `SanitizedToolEvent`.
 3. Add schema and sanitizer tests for new payload shapes.
-4. For pull providers, add fetch logic in `src/fetchers.ts` with bounded pagination/time windows.
+4. For pull providers, add `fetch.items` capability handling in the provider adapter with bounded pagination/time windows.
 
 ## Known Gaps / Next Steps
 

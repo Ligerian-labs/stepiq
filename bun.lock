@@ -64,6 +64,19 @@
         "vite": "^6.2.0",
       },
     },
+    "apps/connectors": {
+      "name": "@stepiq/connectors",
+      "version": "0.0.1",
+      "dependencies": {
+        "@hono/node-server": "^1.13.0",
+        "@stepiq/connector-provider": "*",
+        "@stepiq/core": "*",
+        "hono": "^4.7.0",
+      },
+      "devDependencies": {
+        "tsx": "^4.19.0",
+      },
+    },
     "apps/landing": {
       "name": "@stepiq/landing",
       "version": "0.0.1",
@@ -98,6 +111,13 @@
       },
       "devDependencies": {
         "tsx": "^4.19.0",
+      },
+    },
+    "packages/connector-provider": {
+      "name": "@stepiq/connector-provider",
+      "version": "0.0.1",
+      "dependencies": {
+        "@stepiq/core": "*",
       },
     },
     "packages/core": {
@@ -486,6 +506,10 @@
     "@stepiq/api": ["@stepiq/api@workspace:apps/api"],
 
     "@stepiq/app": ["@stepiq/app@workspace:apps/app"],
+
+    "@stepiq/connector-provider": ["@stepiq/connector-provider@workspace:packages/connector-provider"],
+
+    "@stepiq/connectors": ["@stepiq/connectors@workspace:apps/connectors"],
 
     "@stepiq/core": ["@stepiq/core@workspace:packages/core"],
 

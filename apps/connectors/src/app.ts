@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { getProviderAdapter } from "@stepiq/connector-provider";
 import {
   connectorActionRequestSchema,
+  type ConnectorProvider,
   connectorProviderSchema,
   sanitizedToolEventSchema,
 } from "@stepiq/core";
@@ -9,13 +11,11 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { z } from "zod";
-import { fetchFromSource } from "./fetchers.js";
 import {
   persistRawPayload,
   sanitizeActionPayload,
   sanitizeInboundEvent,
 } from "./policy.js";
-import { executeProviderAction } from "./providers.js";
 
 export const app = new Hono();
 const idempotencyCache = new Map<
@@ -48,6 +48,14 @@ const stepFetchSchema = z.object({
     .default({}),
   dry_run: z.boolean().default(false),
 });
+
+function authFromProviderToken(provider: ConnectorProvider, token: string) {
+  if (!token) return undefined;
+  if (provider === "discord") {
+    return { bot_token: token };
+  }
+  return { access_token: token };
+}
 
 function requireIngressToken(c: Context) {
   const requiredToken = process.env.CONNECTORS_INGEST_TOKEN || "";
@@ -212,11 +220,23 @@ app.post("/inbound/fetch", async (c) => {
   }
 
   const request = parsed.data;
-  const fetchedItems = await fetchFromSource({
-    provider: request.provider,
-    query: request.query,
-    auth: request.auth,
-  }).catch((error) => {
+  const fetchedItems = await (async () => {
+    const adapter = getProviderAdapter(request.provider);
+    const payload = adapter.buildPayload({
+      capability_id: "fetch.items",
+      input: request.query || {},
+    });
+    const result = await adapter.callTool("fetch.items", payload, {
+      auth: request.auth,
+      dry_run: request.dry_run,
+    });
+    if (result.kind !== "fetch") {
+      throw new Error(
+        `Provider "${request.provider}" returned invalid result for fetch.items`,
+      );
+    }
+    return result.items;
+  })().catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Source fetch failed: ${message}`);
   });
@@ -291,11 +311,23 @@ app.post("/steps/fetch", async (c) => {
   }
 
   const request = parsed.data;
-  const fetchedItems = await fetchFromSource({
-    provider: request.provider,
-    query: request.query,
-    auth: request.auth,
-  }).catch((error) => {
+  const fetchedItems = await (async () => {
+    const adapter = getProviderAdapter(request.provider);
+    const payload = adapter.buildPayload({
+      capability_id: "fetch.items",
+      input: request.query || {},
+    });
+    const result = await adapter.callTool("fetch.items", payload, {
+      auth: request.auth,
+      dry_run: request.dry_run,
+    });
+    if (result.kind !== "fetch") {
+      throw new Error(
+        `Provider "${request.provider}" returned invalid result for fetch.items`,
+      );
+    }
+    return result.items;
+  })().catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Source fetch failed: ${message}`);
   });
@@ -349,6 +381,8 @@ app.post("/actions/execute", async (c) => {
     ...parsed.data,
     payload: sanitizeActionPayload(parsed.data.payload || {}),
   };
+  const providerToken = c.req.header("X-Connector-Provider-Token") || "";
+  const providerAuth = authFromProviderToken(request.provider, providerToken);
 
   const now = Date.now();
   for (const [key, value] of idempotencyCache.entries()) {
@@ -359,7 +393,25 @@ app.post("/actions/execute", async (c) => {
     return c.json({ ok: true, cached: true, ...existing.response });
   }
 
-  const result = await executeProviderAction(request);
+  const result = await (async () => {
+    const adapter = getProviderAdapter(request.provider);
+    const payload = adapter.buildPayload({
+      capability_id: request.action,
+      input: request.payload,
+    });
+    const callResult = await adapter.callTool(request.action, payload, {
+      auth: providerAuth,
+      target: request.target,
+      dry_run: request.dry_run,
+      trace_id: request.trace_id,
+    });
+    if (callResult.kind !== "action") {
+      throw new Error(
+        `Provider "${request.provider}" returned invalid result for action "${request.action}"`,
+      );
+    }
+    return callResult.result;
+  })();
   const responsePayload = {
     ok: true,
     request: {

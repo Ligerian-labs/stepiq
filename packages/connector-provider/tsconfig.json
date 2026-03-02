@@ -3,13 +3,9 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "composite": true,
-    "types": ["bun-types"]
+    "composite": true
   },
   "include": ["src"],
   "exclude": ["src/__tests__", "src/**/*.test.ts"],
-  "references": [
-    { "path": "../../packages/core" },
-    { "path": "../../packages/connector-provider" }
-  ]
+  "references": [{ "path": "../../packages/core" }]
 }

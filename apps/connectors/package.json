@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
+    "@stepiq/connector-provider": "*",
     "@stepiq/core": "*",
     "hono": "^4.7.0"
   },
