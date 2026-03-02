@@ -1,7 +1,12 @@
 import type { PipelineDefinition } from "./types";
 import { SUPPORTED_MODELS } from "./constants";
 
-export type ModelProvider = "openai" | "anthropic" | "google" | "mistral";
+export type ModelProvider =
+  | "openai"
+  | "anthropic"
+  | "google"
+  | "mistral"
+  | "zai";
 
 const PROVIDER_SECRET_NAMES: Record<ModelProvider, string[]> = {
   openai: ["OPENAI_API_KEY", "openai_api_key"],
@@ -13,6 +18,7 @@ const PROVIDER_SECRET_NAMES: Record<ModelProvider, string[]> = {
     "google_api_key",
   ],
   mistral: ["MISTRAL_API_KEY", "mistral_api_key"],
+  zai: ["ZAI_API_KEY", "zai_api_key"],
 };
 
 export function providerSecretNames(provider: ModelProvider): string[] {
@@ -20,13 +26,17 @@ export function providerSecretNames(provider: ModelProvider): string[] {
 }
 
 export function providerForModel(model: string): ModelProvider | null {
-  const match = SUPPORTED_MODELS.find((item) => item.id === model);
+  const normalized = model.trim().toLowerCase();
+  const match = SUPPORTED_MODELS.find(
+    (item) => item.id.toLowerCase() === normalized,
+  );
   if (!match) return null;
   if (
     match.provider === "openai" ||
     match.provider === "anthropic" ||
     match.provider === "google" ||
-    match.provider === "mistral"
+    match.provider === "mistral" ||
+    match.provider === "zai"
   ) {
     return match.provider;
   }

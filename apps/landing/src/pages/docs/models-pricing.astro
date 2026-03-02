@@ -1,68 +1,129 @@
 ---
 import DocsLayout from "../../layouts/DocsLayout.astro";
+const MARKUP_PERCENTAGE = 25;
+const TOKENS_PER_CREDIT = 1_000;
+
+const PLAN_LIMITS = {
+  free: { credits: 100, overage_per_credit_cents: 0 },
+  starter: { credits: 2_000, overage_per_credit_cents: 1 },
+  pro: { credits: 8_000, overage_per_credit_cents: 0.8 },
+  enterprise: { credits: -1, overage_per_credit_cents: 0 },
+} as const;
+
+const SUPPORTED_MODELS = [
+  { id: "claude-opus-4-6", name: "Claude Opus 4.6", provider: "anthropic", input_cost_per_million: 5_000, output_cost_per_million: 25_000, max_tokens: 8192 },
+  { id: "gpt-5.2", name: "GPT-5.2", provider: "openai", input_cost_per_million: 1_750, output_cost_per_million: 14_000, max_tokens: 128000 },
+  { id: "gpt-5.2-chat-latest", name: "GPT-5.2 Instant", provider: "openai", input_cost_per_million: 1_750, output_cost_per_million: 14_000, max_tokens: 128000 },
+  { id: "gpt-5.3-codex", name: "GPT-5.3-Codex", provider: "openai", input_cost_per_million: 1_750, output_cost_per_million: 14_000, max_tokens: 128000 },
+  { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", provider: "anthropic", input_cost_per_million: 3_000, output_cost_per_million: 15_000, max_tokens: 8192 },
+  { id: "claude-3-5-haiku-20241022", name: "Claude Haiku 3.5", provider: "anthropic", input_cost_per_million: 250, output_cost_per_million: 1_250, max_tokens: 8192 },
+  { id: "gpt-4o", name: "GPT-4o", provider: "openai", input_cost_per_million: 2_500, output_cost_per_million: 10_000, max_tokens: 16384 },
+  { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "openai", input_cost_per_million: 150, output_cost_per_million: 600, max_tokens: 16384 },
+  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "google", input_cost_per_million: 1_250, output_cost_per_million: 10_000, max_tokens: 65536 },
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "google", input_cost_per_million: 300, output_cost_per_million: 2_500, max_tokens: 65536 },
+  { id: "glm-5", name: "GLM-5", provider: "zai", input_cost_per_million: 20, output_cost_per_million: 110, max_tokens: 128000 },
+  { id: "glm-4.6", name: "GLM-4.6", provider: "zai", input_cost_per_million: 80, output_cost_per_million: 200, max_tokens: 128000 },
+  { id: "mistral-large-latest", name: "Mistral Large Latest", provider: "mistral", input_cost_per_million: 2_000, output_cost_per_million: 6_000, max_tokens: 32000 },
+  { id: "mistral-small-latest", name: "Mistral Small Latest", provider: "mistral", input_cost_per_million: 200, output_cost_per_million: 600, max_tokens: 32000 },
+] as const;
+const providerLabel: Record<string, string> = {
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+  google: "Google",
+  zai: "z.ai",
+  mistral: "Mistral",
+};
+
+const models = [...SUPPORTED_MODELS]
+  .map((model) => ({
+    ...model,
+    input_cost_with_markup: Math.ceil(
+      model.input_cost_per_million * (1 + MARKUP_PERCENTAGE / 100),
+    ),
+    output_cost_with_markup: Math.ceil(
+      model.output_cost_per_million * (1 + MARKUP_PERCENTAGE / 100),
+    ),
+  }))
+  .sort((a, b) => a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name));
+
+function formatUsdPerMillion(cents: number): string {
+  return `$${(cents / 100).toFixed(2)} / 1M`;
+}
+
+function formatCredits(value: number): string {
+  if (value < 0) return "Custom";
+  return value.toLocaleString("en-US");
+}
+
+function formatCents(value: number): string {
+  if (value <= 0) return "N/A";
+  return `€${(value / 100).toFixed(3)}`;
+}
 ---
 
 <DocsLayout title="Models & Pricing" breadcrumb={[{ label: "Docs", href: "/docs" }, { label: "Models & Pricing" }]}>
   <h1 id="overview">Models & Pricing</h1>
-  <p>stepIQ is model-agnostic. Each pipeline step can use a different model. We route requests to the provider and handle authentication, retries, and billing.</p>
+  <p>stepIQ is model-agnostic. Each step can use a different model, and runtime prices are calculated from the same constants used by the API and worker.</p>
 
   <h2 id="available-models">Available models</h2>
 
   <div class="docs-card-grid">
-    <div class="model-card">
-      <span class="model-provider">Anthropic</span>
-      <h3>Claude Sonnet 4</h3>
-      <p style="color:var(--text-secondary);font-size:0.875rem;margin:0;">Best for complex reasoning, long-form writing, and multi-step analysis.</p>
-      <span class="model-pricing">$3.00 / 1M in • $15.00 / 1M out</span>
-    </div>
-    <div class="model-card">
-      <span class="model-provider">OpenAI</span>
-      <h3>GPT-4o</h3>
-      <p style="color:var(--text-secondary);font-size:0.875rem;margin:0;">Versatile model for a wide range of tasks. Fast and reliable.</p>
-      <span class="model-pricing">$2.50 / 1M in • $10.00 / 1M out</span>
-    </div>
-    <div class="model-card">
-      <span class="model-provider">OpenAI</span>
-      <h3>GPT-4o mini</h3>
-      <p style="color:var(--text-secondary);font-size:0.875rem;margin:0;">Lightweight and cheap. Great for simple tasks, classification, and extraction.</p>
-      <span class="model-pricing">$0.15 / 1M in • $0.60 / 1M out</span>
-    </div>
-    <div class="model-card">
-      <span class="model-provider">Meta</span>
-      <h3>Llama 3 70B</h3>
-      <p style="color:var(--text-secondary);font-size:0.875rem;margin:0;">Open-source powerhouse. Cost-effective for high-volume pipelines.</p>
-      <span class="model-pricing">$0.80 / 1M in • $0.80 / 1M out</span>
-    </div>
+    {models.map((model) => (
+      <div class="model-card">
+        <span class="model-provider">{providerLabel[model.provider] || model.provider}</span>
+        <h3>{model.name}</h3>
+        <p style="color:var(--text-secondary);font-size:0.875rem;margin:0;">
+          <code>{model.id}</code> • Max tokens: {model.max_tokens.toLocaleString("en-US")}
+        </p>
+        <span class="model-pricing">
+          {formatUsdPerMillion(model.input_cost_with_markup)} in • {formatUsdPerMillion(model.output_cost_with_markup)} out
+        </span>
+      </div>
+    ))}
   </div>
+  <p style="margin-top:0.75rem;">These are the same marked-up prices returned by <code>GET /api/models</code> (base provider price + {MARKUP_PERCENTAGE}% markup).</p>
 
   <h2 id="credit-system">Credit system</h2>
-  <p>Credits are the universal billing unit across all models. 1 credit ≈ 1,000 tokens (input + output combined). Actual token-to-credit conversion varies by model.</p>
+  <p>Credits are tracked per account plan. Token-to-credit conversion is implemented as <code>1 credit = {TOKENS_PER_CREDIT.toLocaleString("en-US")} tokens</code> for legacy/BYOK-style deduction paths.</p>
 
   <table class="docs-table">
-    <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+    <thead><tr><th>Plan</th><th>Included credits</th><th>Overage rate per credit</th></tr></thead>
     <tbody>
-      <tr><td>1 credit</td><td>~1,000 tokens</td></tr>
-      <tr><td>Our markup</td><td>+25% (average)</td></tr>
-      <tr><td>Balance tracking</td><td>Real-time</td></tr>
+      <tr><td>Free</td><td>{formatCredits(PLAN_LIMITS.free.credits)}</td><td>{formatCents(PLAN_LIMITS.free.overage_per_credit_cents)}</td></tr>
+      <tr><td>Starter</td><td>{formatCredits(PLAN_LIMITS.starter.credits)}</td><td>{formatCents(PLAN_LIMITS.starter.overage_per_credit_cents)}</td></tr>
+      <tr><td>Pro</td><td>{formatCredits(PLAN_LIMITS.pro.credits)}</td><td>{formatCents(PLAN_LIMITS.pro.overage_per_credit_cents)}</td></tr>
+      <tr><td>Enterprise</td><td>{formatCredits(PLAN_LIMITS.enterprise.credits)}</td><td>{formatCents(PLAN_LIMITS.enterprise.overage_per_credit_cents)}</td></tr>
     </tbody>
   </table>
 
   <h2 id="cost-estimation">Cost estimation</h2>
-  <p>Before running a pipeline, stepIQ shows an estimated cost breakdown per step. Here's an example:</p>
+  <p>Current implementation computes cost from measured token usage at execution time. There is no dedicated pre-run estimation endpoint yet.</p>
+  <p>Per step:</p>
+  <pre class="code-body"><code>base_cost_cents =
+  (input_tokens / 1_000_000) * input_cost_per_million +
+  (output_tokens / 1_000_000) * output_cost_per_million
+
+step_cost_cents = ceil(base_cost_cents * (1 + {MARKUP_PERCENTAGE} / 100))</code></pre>
+  <p>Run totals are the sum of step costs. Credits are then deducted by funding mode:</p>
+  <ul>
+    <li><code>app_credits</code> (Starter/Pro with platform keys): <code>ceil(total_cost_cents / overage_per_credit_cents)</code></li>
+    <li><code>legacy</code> (e.g. free): <code>ceil(total_tokens / {TOKENS_PER_CREDIT.toLocaleString("en-US")})</code></li>
+    <li><code>byok_required</code>: <code>0</code> credits deducted by platform</li>
+  </ul>
 
   <div class="code-card">
     <div class="code-header">
       <div class="code-dots"><span class="code-dot red"></span><span class="code-dot yellow"></span><span class="code-dot green"></span></div>
-      <span class="code-filename">cost-estimate.txt</span>
+      <span class="code-filename">run-cost-example.txt</span>
     </div>
-    <pre class="code-body"><code>Pipeline: weekly-blog-generator
-Estimated cost: 12-18 credits (~€0.15)
+    <pre class="code-body"><code>Run: weekly-blog-generator
+Funding mode: app_credits (starter)
 
-  Step 1 (research, claude-sonnet):   ~4 credits
-  Step 2 (pick_topic, gpt-4o):        ~2 credits
-  Step 3 (write_draft, claude-sonnet): ~8 credits
-  Step 4 (review, claude-sonnet):      ~4 credits
+Total tokens: 42,600
+Total cost: 62 cents
+Credits deducted: ceil(62 / 1) = 62 credits
 
-Your balance: 1,847 credits</code></pre>
+If the same run used legacy mode:
+credits deducted: ceil(42,600 / {TOKENS_PER_CREDIT.toLocaleString("en-US")}) = 43 credits</code></pre>
   </div>
 </DocsLayout>
