@@ -12,6 +12,7 @@ console.log("🔐 Platform model keys:", {
   anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
   gemini: Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY),
   mistral: Boolean(process.env.MISTRAL_API_KEY),
+  zai: Boolean(process.env.ZAI_API_KEY),
 });
 
 console.log("🔌 Connecting to Redis...");

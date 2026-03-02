@@ -1,16 +1,40 @@
 ---
 import "../styles/global.css";
 import { DOCS_PAGES, getDocsPageByRoute } from "../lib/docs/content.js";
+import { SITE_NAME, buildSeoMeta, getSiteUrl } from "../lib/seo.js";
 
 interface Props {
   title: string;
+  description?: string;
   breadcrumb?: { label: string; href?: string }[];
+  keywords?: string[];
+  noindex?: boolean;
+  structuredData?: object | object[];
 }
 
-const { title, breadcrumb = [] } = Astro.props;
+const {
+  title,
+  description: providedDescription,
+  breadcrumb = [],
+  keywords,
+  noindex = false,
+  structuredData = [],
+} = Astro.props;
 
 const currentPath = Astro.url.pathname;
 const currentPage = getDocsPageByRoute(currentPath);
+const description =
+  providedDescription ||
+  currentPage?.description ||
+  `${title} technical documentation for stepIQ.`;
+const seo = buildSeoMeta({
+  title: `${title} — stepIQ Docs`,
+  description,
+  path: currentPath,
+  type: "article",
+  keywords,
+  noindex,
+});
 const referencePages = DOCS_PAGES.filter((page) => page.route !== currentPath);
 const sectionLinks: { label: string; href: string; active: boolean }[] =
   currentPage
@@ -20,6 +44,40 @@ const sectionLinks: { label: string; href: string; active: boolean }[] =
         active: index === 0,
       }))
     : [];
+const structuredDataItems = Array.isArray(structuredData)
+  ? structuredData
+  : [structuredData];
+const siteUrl = getSiteUrl();
+const breadcrumbItems = [
+  { label: "Home", href: "/" },
+  ...breadcrumb.map((item) => ({ label: item.label, href: item.href })),
+];
+const docsStructuredData = [
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    headline: title,
+    description,
+    mainEntityOfPage: seo.canonical,
+    about: "AI pipeline orchestration",
+    publisher: {
+      "@type": "Organization",
+      name: SITE_NAME,
+      url: siteUrl,
+    },
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: breadcrumbItems.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.label,
+      item: item.href ? new URL(item.href, `${siteUrl}/`).toString() : seo.canonical,
+    })),
+  },
+];
+const allStructuredDataItems = [...docsStructuredData, ...structuredDataItems];
 ---
 
 <!doctype html>
@@ -27,8 +85,56 @@ const sectionLinks: { label: string; href: string; active: boolean }[] =
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content={`${title} — stepIQ Documentation`} />
-    <title>{title} — stepIQ Docs</title>
+    <title>{seo.title}</title>
+    <meta name="description" content={seo.description} />
+    <meta name="robots" content={seo.robots} />
+    <link rel="canonical" href={seo.canonical} />
+    {seo.keywords && <meta name="keywords" content={seo.keywords} />}
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:type" content={seo.type} />
+    <meta property="og:title" content={seo.title} />
+    <meta property="og:description" content={seo.description} />
+    <meta property="og:url" content={seo.canonical} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={seo.title} />
+    <meta name="twitter:description" content={seo.description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon.svg" />
+    <script is:inline>
+      !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url lib get_property getSessionProperty toString".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+      posthog.init('phc_hmEYKj8OGt4Mm6hsOyn7cuBpJlIa8ubgzSmsuoRxMif', {
+        api_host: 'https://us.i.posthog.com',
+        person_profiles: 'identified_only',
+        capture_pageview: true,
+        capture_pageleave: true,
+      });
+
+      const params = new URLSearchParams(window.location.search);
+      const attribution = {
+        utm_source: params.get("utm_source"),
+        utm_medium: params.get("utm_medium"),
+        utm_campaign: params.get("utm_campaign"),
+        utm_term: params.get("utm_term"),
+        utm_content: params.get("utm_content"),
+        referrer: document.referrer || undefined,
+      };
+
+      if (Object.values(attribution).some(Boolean)) {
+        posthog.register_once(attribution);
+      }
+
+      posthog.register({
+        site_section: "docs",
+        page_path: window.location.pathname,
+      });
+    </script>
+    {
+      allStructuredDataItems
+        .filter((item) => item && Object.keys(item).length > 0)
+        .map((item) => (
+          <script is:inline type="application/ld+json" set:html={JSON.stringify(item)} />
+        ))
+    }
   </head>
   <body>
     <div class="landing">
@@ -192,5 +298,18 @@ const sectionLinks: { label: string; href: string; active: boolean }[] =
         </div>
       </footer>
     </div>
+    <script is:inline>
+      if (typeof window.posthog !== "undefined") {
+        document.querySelectorAll("a.docs-sidebar-link").forEach((link) => {
+          link.addEventListener("click", () => {
+            window.posthog.capture("docs_sidebar_nav_clicked", {
+              href: link.getAttribute("href"),
+              label: link.textContent?.trim(),
+              current_path: window.location.pathname,
+            });
+          });
+        });
+      }
+    </script>
   </body>
 </html>

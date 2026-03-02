@@ -191,6 +191,7 @@ mock.module("../core-adapter.js", () => ({
         "google_api_key",
       ];
     if (provider === "mistral") return ["MISTRAL_API_KEY", "mistral_api_key"];
+    if (provider === "zai") return ["ZAI_API_KEY", "zai_api_key"];
     return [];
   },
   createKmsProvider: () => ({

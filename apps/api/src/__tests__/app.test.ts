@@ -145,6 +145,15 @@ describe("Models route", () => {
     expect(mini).toBeDefined();
     expect(mini.input_cost_per_million).toBe(Math.ceil(150 * 1.25));
   });
+
+  it("includes z.ai models with markup applied", async () => {
+    const res = await app.request("/api/models");
+    const body = await res.json();
+    const glm5 = body.find((m: { id: string }) => m.id === "glm-5");
+    expect(glm5).toBeDefined();
+    expect(glm5.provider).toBe("zai");
+    expect(glm5.input_cost_per_million).toBe(Math.ceil(20 * 1.25));
+  });
 });
 
 describe("Webhook route", () => {

@@ -1,11 +1,29 @@
 ---
 import "../styles/global.css";
+import { SITE_NAME, buildSeoMeta } from "../lib/seo.js";
 
 interface Props {
   title: string;
+  description?: string;
+  path?: string;
+  keywords?: string[];
+  noindex?: boolean;
+  structuredData?: object | object[];
 }
 
-const { title } = Astro.props;
+const {
+  title,
+  description = "Build AI pipelines, run multi-step workflows, and scale model-agnostic automation.",
+  path = Astro.url.pathname,
+  keywords,
+  noindex = false,
+  structuredData = [],
+} = Astro.props;
+
+const seo = buildSeoMeta({ title, description, path, keywords, noindex });
+const structuredDataItems = Array.isArray(structuredData)
+  ? structuredData
+  : [structuredData];
 ---
 
 <!doctype html>
@@ -13,8 +31,21 @@ const { title } = Astro.props;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Build AI pipelines. Ship without infrastructure." />
-    <title>{title}</title>
+    <title>{seo.title}</title>
+    <meta name="description" content={seo.description} />
+    <meta name="robots" content={seo.robots} />
+    <link rel="canonical" href={seo.canonical} />
+    {seo.keywords && <meta name="keywords" content={seo.keywords} />}
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:type" content={seo.type} />
+    <meta property="og:title" content={seo.title} />
+    <meta property="og:description" content={seo.description} />
+    <meta property="og:url" content={seo.canonical} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={seo.title} />
+    <meta name="twitter:description" content={seo.description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon.svg" />
     <!-- PostHog Analytics -->
     <script is:inline>
       !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url lib get_property getSessionProperty toString".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
@@ -24,7 +55,33 @@ const { title } = Astro.props;
         capture_pageview: true,
         capture_pageleave: true,
       });
+
+      const params = new URLSearchParams(window.location.search);
+      const attribution = {
+        utm_source: params.get("utm_source"),
+        utm_medium: params.get("utm_medium"),
+        utm_campaign: params.get("utm_campaign"),
+        utm_term: params.get("utm_term"),
+        utm_content: params.get("utm_content"),
+        referrer: document.referrer || undefined,
+      };
+
+      if (Object.values(attribution).some(Boolean)) {
+        posthog.register_once(attribution);
+      }
+
+      posthog.register({
+        site_section: window.location.pathname.startsWith("/docs") ? "docs" : "site",
+        page_path: window.location.pathname,
+      });
     </script>
+    {
+      structuredDataItems
+        .filter((item) => item && Object.keys(item).length > 0)
+        .map((item) => (
+          <script is:inline type="application/ld+json" set:html={JSON.stringify(item)} />
+        ))
+    }
   </head>
   <body>
     <slot />

@@ -92,6 +92,24 @@ export const SUPPORTED_MODELS: ModelInfo[] = [
     supports_json: true,
   },
   {
+    id: "glm-5",
+    name: "GLM-5",
+    provider: "zai",
+    input_cost_per_million: 20, // $0.02
+    output_cost_per_million: 110, // $0.11
+    max_tokens: 128000,
+    supports_json: true,
+  },
+  {
+    id: "glm-4.6",
+    name: "GLM-4.6",
+    provider: "zai",
+    input_cost_per_million: 80, // $0.08
+    output_cost_per_million: 200, // $0.20
+    max_tokens: 128000,
+    supports_json: true,
+  },
+  {
     id: "mistral-large-latest",
     name: "Mistral Large Latest",
     provider: "mistral",

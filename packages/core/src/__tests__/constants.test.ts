@@ -31,6 +31,7 @@ describe("SUPPORTED_MODELS", () => {
     expect(providers.has("openai")).toBe(true);
     expect(providers.has("google")).toBe(true);
     expect(providers.has("mistral")).toBe(true);
+    expect(providers.has("zai")).toBe(true);
   });
 
   it("has unique model IDs", () => {
@@ -51,6 +52,9 @@ describe("SUPPORTED_MODELS", () => {
       }
       if (model.provider === "mistral") {
         expect(model.id.startsWith("mistral-")).toBe(true);
+      }
+      if (model.provider === "zai") {
+        expect(model.id.startsWith("glm-")).toBe(true);
       }
     }
   });

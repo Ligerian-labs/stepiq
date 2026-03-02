@@ -582,6 +582,44 @@ textarea:focus-visible,
   gap: 1.5rem;
 }
 
+/* ── Differentiators ── */
+.differentiators-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.differentiator-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 1.6rem;
+}
+
+.differentiator-card h3 {
+  margin: 0.2rem 0 0;
+  font-size: 1.125rem;
+}
+
+.differentiator-card p {
+  font-size: 0.9375rem;
+}
+
+.proof-link {
+  color: var(--accent);
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.proof-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.15rem;
+}
+
 /* ── Code Block ── */
 .code-card {
   border: 1px solid var(--divider);
@@ -728,12 +766,13 @@ textarea:focus-visible,
   width: fit-content;
   padding: 0.25rem 0.75rem;
   border-radius: 100px;
-  background: color-mix(in oklab, var(--accent), transparent 80%);
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
   color: var(--accent);
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.09375rem;
-  margin-bottom: 0;
+  margin: 0;
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -803,6 +842,15 @@ textarea:focus-visible,
   border-color: var(--accent);
   border-width: 2px;
   box-shadow: none;
+  padding-top: 2.5rem;
+}
+
+.pricing-card.featured .popular-badge {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+  z-index: 1;
 }
 
 .pricing-card .solid-link,
@@ -814,6 +862,10 @@ textarea:focus-visible,
   padding: 0.875rem 0;
   border-radius: 0.5rem;
   line-height: 1;
+}
+
+.pricing-toggle {
+  margin: 0 0 40px;
 }
 
 /* ── Footer ── */
@@ -1779,6 +1831,10 @@ textarea:focus-visible,
     grid-template-columns: 1fr 1fr;
   }
 
+  .differentiators-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .features-layout {
     grid-template-columns: 1fr;
   }
@@ -1884,6 +1940,10 @@ textarea:focus-visible,
 
   .section-sub {
     font-size: 1rem;
+  }
+
+  .differentiators-grid {
+    grid-template-columns: 1fr;
   }
 
   .kicker {

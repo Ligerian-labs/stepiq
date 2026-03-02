@@ -78,9 +78,33 @@ const quickLinks = [
     icon: "webhook",
   },
 ];
+
+const structuredData = [
+  {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "stepIQ Documentation",
+    description: "Documentation hub for building and operating AI pipelines with stepIQ.",
+    url: "https://stepiq.sh/docs",
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://stepiq.sh/" },
+      { "@type": "ListItem", position: 2, name: "Docs", item: "https://stepiq.sh/docs" },
+    ],
+  },
+];
 ---
 
-<Layout title="Documentation - stepIQ">
+<Layout
+  title="Documentation — stepIQ"
+  description="Step-by-step docs for stepIQ: getting started, pipeline format, API reference, model support, and pricing."
+  path="/docs"
+  keywords={["stepIQ docs", "AI workflow documentation", "pipeline API", "models and pricing"]}
+  structuredData={structuredData}
+>
   <div class="landing">
     <a class="skip-link" href="#docs-main">Skip to main content</a>
 
@@ -242,3 +266,17 @@ const quickLinks = [
     </footer>
   </div>
 </Layout>
+
+<script>
+  if (typeof (window as any).posthog !== "undefined") {
+    document.querySelectorAll<HTMLAnchorElement>(".docs-card, .docs-quick-link").forEach((link) => {
+      link.addEventListener("click", () => {
+        (window as any).posthog.capture("docs_hub_link_clicked", {
+          href: link.getAttribute("href"),
+          label: link.textContent?.trim().slice(0, 120),
+          page_path: window.location.pathname,
+        });
+      });
+    });
+  }
+</script>

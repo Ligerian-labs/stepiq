@@ -20,6 +20,7 @@ interface ModelRequest {
     gemini?: string;
     google?: string;
     mistral?: string;
+    zai?: string;
   };
 }
 
@@ -42,8 +43,9 @@ function isPlaceholderApiKey(value: string): boolean {
 }
 
 export async function callModel(req: ModelRequest): Promise<ModelResponse> {
+  const normalized = req.model.trim().toLowerCase();
   const modelInfo = SUPPORTED_MODELS.find(
-    (m: (typeof SUPPORTED_MODELS)[number]) => m.id === req.model,
+    (m: (typeof SUPPORTED_MODELS)[number]) => m.id.toLowerCase() === normalized,
   );
   if (!modelInfo) throw new Error(`Unsupported model: ${req.model}`);
 
@@ -60,6 +62,9 @@ export async function callModel(req: ModelRequest): Promise<ModelResponse> {
   }
   if (modelInfo.provider === "mistral") {
     return callMistral(req, modelInfo, start);
+  }
+  if (modelInfo.provider === "zai") {
+    return callZAI(req, modelInfo, start);
   }
 
   throw new Error(`Unsupported provider: ${modelInfo.provider}`);
@@ -79,7 +84,7 @@ async function callAnthropic(
   const anthropic = new Anthropic({ apiKey });
 
   const response = await anthropic.messages.create({
-    model: req.model,
+    model: modelInfo.id,
     max_tokens: req.max_tokens || 4096,
     temperature: req.temperature,
     system: req.system,
@@ -98,7 +103,7 @@ async function callAnthropic(
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     cost_cents: costCents,
-    model: req.model,
+    model: modelInfo.id,
     latency_ms: Date.now() - start,
   };
 }
@@ -117,7 +122,7 @@ async function callOpenAI(
   const openai = new OpenAI({ apiKey });
 
   const response = await openai.chat.completions.create({
-    model: req.model,
+    model: modelInfo.id,
     max_tokens: req.max_tokens || 4096,
     temperature: req.temperature,
     messages: [
@@ -139,7 +144,7 @@ async function callOpenAI(
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     cost_cents: costCents,
-    model: req.model,
+    model: modelInfo.id,
     latency_ms: Date.now() - start,
   };
 }
@@ -163,7 +168,7 @@ async function callGoogle(
   const google = new GoogleGenAI({ apiKey });
 
   const response = await google.models.generateContent({
-    model: req.model,
+    model: modelInfo.id,
     contents: req.prompt,
     config: {
       ...(req.system ? { systemInstruction: req.system } : {}),
@@ -187,7 +192,51 @@ async function callGoogle(
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     cost_cents: costCents,
-    model: req.model,
+    model: modelInfo.id,
+    latency_ms: Date.now() - start,
+  };
+}
+
+async function callZAI(
+  req: ModelRequest,
+  modelInfo: (typeof SUPPORTED_MODELS)[number],
+  start: number,
+): Promise<ModelResponse> {
+  const apiKey = req.api_keys?.zai || process.env.ZAI_API_KEY || "";
+  if (!apiKey || isPlaceholderApiKey(apiKey)) {
+    throw new Error(
+      "z.ai API key is missing. Save ZAI_API_KEY in Settings → Secrets.",
+    );
+  }
+
+  const baseURL =
+    process.env.ZAI_BASE_URL?.trim() || "https://api.z.ai/api/paas/v4";
+  const zai = new OpenAI({ apiKey, baseURL });
+
+  const response = await zai.chat.completions.create({
+    model: modelInfo.id,
+    max_tokens: req.max_tokens || 4096,
+    temperature: req.temperature,
+    messages: [
+      ...(req.system ? [{ role: "system" as const, content: req.system }] : []),
+      { role: "user" as const, content: req.prompt },
+    ],
+    ...(req.output_format === "json"
+      ? { response_format: { type: "json_object" } }
+      : {}),
+  });
+
+  const output = response.choices[0]?.message?.content || "";
+  const inputTokens = response.usage?.prompt_tokens || 0;
+  const outputTokens = response.usage?.completion_tokens || 0;
+  const costCents = calculateCost(inputTokens, outputTokens, modelInfo);
+
+  return {
+    output,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    cost_cents: costCents,
+    model: modelInfo.id,
     latency_ms: Date.now() - start,
   };
 }
@@ -206,7 +255,7 @@ async function callMistral(
   const mistral = new Mistral({ apiKey });
 
   const response = await mistral.chat.complete({
-    model: req.model,
+    model: modelInfo.id,
     maxTokens: req.max_tokens || 4096,
     temperature: req.temperature,
     messages: [
@@ -228,7 +277,7 @@ async function callMistral(
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     cost_cents: costCents,
-    model: req.model,
+    model: modelInfo.id,
     latency_ms: Date.now() - start,
   };
 }

@@ -48,6 +48,8 @@ const { entries } = Astro.props;
 
     let activeIndex = -1;
     let visible = [];
+    let lastQuery = "";
+    let lastTrackedQuery = "";
 
     const normalize = (value) =>
       value
@@ -106,6 +108,17 @@ const { entries } = Astro.props;
         link.href = entry.href;
         link.className = "docs-search-link";
         link.innerHTML = `<strong>${entry.title}</strong><span>${entry.excerpt}</span>`;
+        link.addEventListener("click", () => {
+          if (typeof window.posthog !== "undefined") {
+            window.posthog.capture("docs_search_result_clicked", {
+              query: lastQuery,
+              result_href: entry.href,
+              result_title: entry.title,
+              result_rank: index + 1,
+              page_path: window.location.pathname,
+            });
+          }
+        });
 
         if (index === activeIndex) {
           item.classList.add("active");
@@ -122,6 +135,7 @@ const { entries } = Astro.props;
 
     const runSearch = (raw) => {
       const query = normalize(raw);
+      lastQuery = query;
       if (!query) {
         visible = [];
         activeIndex = -1;
@@ -140,6 +154,15 @@ const { entries } = Astro.props;
       visible = scored;
       activeIndex = visible.length > 0 ? 0 : -1;
       renderResults();
+
+      if (typeof window.posthog !== "undefined" && query.length >= 2 && query !== lastTrackedQuery) {
+        window.posthog.capture("docs_search_query", {
+          query,
+          results_count: visible.length,
+          page_path: window.location.pathname,
+        });
+        lastTrackedQuery = query;
+      }
 
       if (activeIndex >= 0) {
         input?.setAttribute("aria-activedescendant", `docs-search-option-${activeIndex}`);

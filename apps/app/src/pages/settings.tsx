@@ -601,6 +601,9 @@ export function SettingsPage() {
                   <span className="rounded border border-[var(--divider)] px-2 py-1">
                     MISTRAL_API_KEY
                   </span>
+                  <span className="rounded border border-[var(--divider)] px-2 py-1">
+                    ZAI_API_KEY
+                  </span>
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">

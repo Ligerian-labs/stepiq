@@ -55,6 +55,7 @@ function resolvePlatformApiKeys() {
     anthropic: process.env.ANTHROPIC_API_KEY,
     gemini: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
     mistral: process.env.MISTRAL_API_KEY,
+    zai: process.env.ZAI_API_KEY,
   };
 }
 
@@ -184,6 +185,9 @@ export async function executePipeline(runId: string) {
                     mistral:
                       envSecrets.values.MISTRAL_API_KEY ||
                       envSecrets.values.mistral_api_key,
+                    zai:
+                      envSecrets.values.ZAI_API_KEY ||
+                      envSecrets.values.zai_api_key,
                   }),
             },
           });
@@ -416,6 +420,7 @@ async function resolveUserSecrets(
         ...providerSecretNames("anthropic"),
         ...providerSecretNames("google"),
         ...providerSecretNames("mistral"),
+        ...providerSecretNames("zai"),
       ]
     : [];
 
