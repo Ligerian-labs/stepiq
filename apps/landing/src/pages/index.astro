@@ -553,6 +553,34 @@ const structuredData = [
 </Layout>
 
 <script>
+  const syncMotionState = () => {
+    const root = document.documentElement;
+    const body = document.body;
+    const motionDisabled =
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      root.dataset.animations === "off" ||
+      root.dataset.motion === "off" ||
+      body.dataset.animations === "off" ||
+      body.dataset.motion === "off" ||
+      body.classList.contains("reduce-motion") ||
+      body.classList.contains("motion-disabled");
+
+    body.classList.toggle("motion-enabled", !motionDisabled);
+  };
+
+  syncMotionState();
+
+  const motionObserver = new MutationObserver(() => syncMotionState());
+  motionObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-animations", "data-motion", "class"],
+  });
+  motionObserver.observe(document.body, {
+    attributes: true,
+    attributeFilter: ["data-animations", "data-motion", "class"],
+  });
+  window.matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", syncMotionState);
+
   const toggleButtons =
     document.querySelectorAll<HTMLButtonElement>("[data-billing-toggle]");
   const prices =
