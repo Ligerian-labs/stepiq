@@ -121,9 +121,12 @@ async function callOpenAI(
   }
   const openai = new OpenAI({ apiKey });
 
+  const isGpt5Family = modelInfo.id.toLowerCase().startsWith("gpt-5");
   const response = await openai.chat.completions.create({
     model: modelInfo.id,
-    max_tokens: req.max_tokens || 4096,
+    ...(isGpt5Family
+      ? { max_completion_tokens: req.max_tokens || 4096 }
+      : { max_tokens: req.max_tokens || 4096 }),
     temperature: req.temperature,
     messages: [
       ...(req.system ? [{ role: "system" as const, content: req.system }] : []),
@@ -213,9 +216,12 @@ async function callZAI(
     process.env.ZAI_BASE_URL?.trim() || "https://api.z.ai/api/paas/v4";
   const zai = new OpenAI({ apiKey, baseURL });
 
+  const isGpt5Family = modelInfo.id.toLowerCase().startsWith("gpt-5");
   const response = await zai.chat.completions.create({
     model: modelInfo.id,
-    max_tokens: req.max_tokens || 4096,
+    ...(isGpt5Family
+      ? { max_completion_tokens: req.max_tokens || 4096 }
+      : { max_tokens: req.max_tokens || 4096 }),
     temperature: req.temperature,
     messages: [
       ...(req.system ? [{ role: "system" as const, content: req.system }] : []),

@@ -44,10 +44,26 @@ const tables = {
     userId: "pipelines.userId",
     status: "pipelines.status",
     version: "pipelines.version",
+    createdAt: "pipelines.createdAt",
+  },
+  chatSessions: {
+    __name: "chatSessions",
+    id: "chatSessions.id",
+    userId: "chatSessions.userId",
+  },
+  chatMessages: {
+    __name: "chatMessages",
+    id: "chatMessages.id",
+    sessionId: "chatMessages.sessionId",
+    createdAt: "chatMessages.createdAt",
   },
   pipelineVersions: {
     __name: "pipelineVersions",
     id: "pipelineVersions.id",
+  },
+  pipelineTemplates: {
+    __name: "pipelineTemplates",
+    id: "pipelineTemplates.id",
   },
   runs: {
     __name: "runs",
@@ -61,6 +77,7 @@ const tables = {
     pipelineId: "schedules.pipelineId",
   },
   stepExecutions: { __name: "stepExecutions", id: "stepExecutions.id" },
+  stepTraceEvents: { __name: "stepTraceEvents", id: "stepTraceEvents.id" },
   userSecrets: { __name: "userSecrets", id: "userSecrets.id" },
   stripeEvents: { __name: "stripeEvents", id: "stripeEvents.id" },
 };
@@ -133,6 +150,7 @@ function queryResult(rows: unknown[]) {
 mock.module("../db/schema.js", () => tables);
 mock.module("drizzle-orm", () => ({
   and: (...conds: unknown[]) => ({ type: "and", conds }),
+  asc: (value: unknown) => ({ type: "asc", value }),
   eq: (left: unknown, right: unknown) => ({ type: "eq", left, right }),
   gte: (left: unknown, right: unknown) => ({ type: "gte", left, right }),
   gt: (left: unknown, right: unknown) => ({ type: "gt", left, right }),
@@ -163,9 +181,19 @@ mock.module("../db/index.js", () => ({
             const rows = Array.from({ length: state.activePipelineCount }).map(
               (_, idx) => ({
                 id: `pipeline-${idx + 1}`,
+                createdAt: new Date(),
               }),
             );
             return queryResult(rows);
+          }
+          if (table.__name === "chatSessions") {
+            return queryResult([]);
+          }
+          if (table.__name === "chatMessages") {
+            return queryResult([]);
+          }
+          if (table.__name === "pipelineTemplates") {
+            return queryResult([]);
           }
           if (table.__name === "runs") {
             const rows = Array.from({ length: state.runsTodayCount }).map(
@@ -364,6 +392,48 @@ describe("plan limit enforcement", () => {
     const body = await res.json();
     expect(body.code).toBe("PLAN_BYOK_REQUIRED");
     expect(state.insertedRuns).toBe(0);
+  });
+
+  it("rejects manual run when required input schema fields are missing", async () => {
+    state.user = {
+      id: "c0c0c0c0-d1d1-e2e2-f3f3-a4a4a4a4a4a4",
+      plan: "pro",
+      creditsRemaining: 100,
+    };
+    state.runsTodayCount = 0;
+    state.insertedRuns = 0;
+    state.pipeline.definition = {
+      name: "plan-limit-pipeline",
+      version: 1,
+      input: {
+        schema: {
+          topic: { type: "string", required: true },
+        },
+      },
+      steps: [{ id: "s1", type: "llm", model: "gpt-4o-mini", prompt: "Hi" }],
+    };
+
+    const headers = await authHeaders();
+    const res = await app.request(
+      "/api/pipelines/a0a0a0a0-b1b1-c2c2-d3d3-e4e4e4e4e4e4/run",
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ input_data: {} }),
+      },
+    );
+
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.error).toBe("Input validation failed");
+    expect(body.issues?.[0]?.field).toBe("topic");
+    expect(state.insertedRuns).toBe(0);
+
+    state.pipeline.definition = {
+      name: "plan-limit-pipeline",
+      version: 1,
+      steps: [{ id: "s1", type: "llm", model: "gpt-4o-mini", prompt: "Hi" }],
+    };
   });
 
   it("returns invalid for malformed validate payload", async () => {

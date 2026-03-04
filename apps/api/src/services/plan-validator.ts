@@ -276,6 +276,38 @@ export async function assertPipelineDefinitionWithinPlan(
       { plan },
     );
   }
+
+  const maxTurns = limits.agent_max_turns ?? 8;
+  const maxDuration = limits.agent_max_duration_seconds ?? 120;
+  const maxToolCalls = limits.agent_max_tool_calls ?? 3;
+
+  for (const step of definition.steps || []) {
+    if ((step.type || "llm") !== "llm") continue;
+    const agent = step.agent || definition.agent_defaults;
+    if (!agent) continue;
+
+    if ((agent.max_turns ?? 0) > maxTurns) {
+      throw new PlanValidationError(
+        "PLAN_MAX_STEPS",
+        `Agent max_turns exceeds plan limit (${maxTurns})`,
+        { plan, step_id: step.id, limit: maxTurns },
+      );
+    }
+    if ((agent.max_duration_seconds ?? 0) > maxDuration) {
+      throw new PlanValidationError(
+        "PLAN_MAX_STEPS",
+        `Agent max_duration_seconds exceeds plan limit (${maxDuration})`,
+        { plan, step_id: step.id, limit: maxDuration },
+      );
+    }
+    if ((agent.max_tool_calls ?? 0) > maxToolCalls) {
+      throw new PlanValidationError(
+        "PLAN_MAX_STEPS",
+        `Agent max_tool_calls exceeds plan limit (${maxToolCalls})`,
+        { plan, step_id: step.id, limit: maxToolCalls },
+      );
+    }
+  }
 }
 
 export async function assertCanTriggerRun(userId: string): Promise<void> {

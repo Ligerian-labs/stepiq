@@ -50,3 +50,91 @@ button:disabled {
   background: var(--text-muted);
   border-radius: 3px;
 }
+
+.js-source-editor .token.comment,
+.js-source-editor .token.prolog,
+.js-source-editor .token.doctype,
+.js-source-editor .token.cdata {
+  color: #64748b;
+}
+
+.js-source-editor .token.punctuation {
+  color: #94a3b8;
+}
+
+.js-source-editor .token.property,
+.js-source-editor .token.tag,
+.js-source-editor .token.boolean,
+.js-source-editor .token.number,
+.js-source-editor .token.constant,
+.js-source-editor .token.symbol,
+.js-source-editor .token.deleted {
+  color: #f59e0b;
+}
+
+.js-source-editor .token.selector,
+.js-source-editor .token.attr-name,
+.js-source-editor .token.string,
+.js-source-editor .token.char,
+.js-source-editor .token.builtin,
+.js-source-editor .token.inserted {
+  color: #34d399;
+}
+
+.js-source-editor .token.operator,
+.js-source-editor .token.entity,
+.js-source-editor .token.url {
+  color: #c084fc;
+}
+
+.js-source-editor .token.atrule,
+.js-source-editor .token.attr-value,
+.js-source-editor .token.keyword {
+  color: #38bdf8;
+}
+
+.js-source-editor .token.function,
+.js-source-editor .token.class-name {
+  color: #fb7185;
+}
+
+.run-debug-block .token.comment,
+.run-debug-block .token.prolog,
+.run-debug-block .token.doctype,
+.run-debug-block .token.cdata {
+  color: #64748b;
+}
+
+.run-debug-block .token.punctuation {
+  color: #94a3b8;
+}
+
+.run-debug-block .token.property,
+.run-debug-block .token.tag,
+.run-debug-block .token.boolean,
+.run-debug-block .token.number,
+.run-debug-block .token.constant,
+.run-debug-block .token.symbol {
+  color: #f59e0b;
+}
+
+.run-debug-block .token.selector,
+.run-debug-block .token.attr-name,
+.run-debug-block .token.string,
+.run-debug-block .token.char,
+.run-debug-block .token.builtin,
+.run-debug-block .token.url {
+  color: #34d399;
+}
+
+.run-debug-block .token.operator,
+.run-debug-block .token.entity,
+.run-debug-block .token.keyword {
+  color: #38bdf8;
+}
+
+.run-debug-block .token.function,
+.run-debug-block .token.class-name,
+.run-debug-block .token.title {
+  color: #fb7185;
+}

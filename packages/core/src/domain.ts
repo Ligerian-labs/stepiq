@@ -8,6 +8,13 @@ export const STEP_TYPES = [
   "code",
 ] as const;
 
+export const SAFE_AGENT_TOOL_TYPES = [
+  "http_request",
+  "extract_json",
+  "template_render",
+  "curl",
+] as const;
+
 export const OUTPUT_FORMATS = ["text", "json", "markdown"] as const;
 
 export const TRIGGER_TYPES = [

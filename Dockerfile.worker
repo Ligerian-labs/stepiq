@@ -1,6 +1,7 @@
 FROM node:20-slim
 WORKDIR /app
 RUN npm i -g bun
+RUN apt-get update && apt-get install -y --no-install-recommends golang-go && rm -rf /var/lib/apt/lists/*
 COPY package.json bun.lock* bunfig.toml* ./
 COPY packages/core/package.json packages/core/
 COPY packages/ui/package.json packages/ui/
@@ -13,7 +14,7 @@ COPY tsconfig.json ./
 COPY packages/core packages/core
 COPY apps/api apps/api
 COPY apps/worker apps/worker
-RUN bun tsc -p packages/core/tsconfig.json && bun tsc -p apps/api/tsconfig.json && bun tsc -p apps/worker/tsconfig.json
+RUN bun tsc -p packages/core/tsconfig.json && bun tsc -p apps/api/tsconfig.json && bun run --filter @stepiq/worker build
 COPY apps/api/drizzle ./apps/api/drizzle
 COPY apps/worker/start.sh ./apps/worker/start.sh
 RUN chmod +x ./apps/worker/start.sh

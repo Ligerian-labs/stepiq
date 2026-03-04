@@ -15,7 +15,12 @@ export class ApiError extends Error {
   code?: string;
   details?: unknown;
 
-  constructor(status: number, message: string, code?: string, details?: unknown) {
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    details?: unknown,
+  ) {
     super(message);
     this.status = status;
     this.code = code;
@@ -86,6 +91,12 @@ export interface RunRecord {
   total_tokens?: number;
   totalCostCents?: number;
   total_cost_cents?: number;
+  modelCostCents?: number;
+  model_cost_cents?: number;
+  toolCostCents?: number;
+  tool_cost_cents?: number;
+  toolCallsTotal?: number;
+  tool_calls_total?: number;
   fundingMode?: "legacy" | "app_credits" | "byok_required";
   funding_mode?: "legacy" | "app_credits" | "byok_required";
   creditsDeducted?: number;
@@ -117,6 +128,28 @@ export interface StepExecutionRecord {
   output_tokens?: number;
   costCents?: number;
   cost_cents?: number;
+  modelCostCents?: number;
+  model_cost_cents?: number;
+  toolCostCents?: number;
+  tool_cost_cents?: number;
+  toolCallsTotal?: number;
+  tool_calls_total?: number;
+  toolCallsSuccess?: number;
+  tool_calls_success?: number;
+  toolCallsFailed?: number;
+  tool_calls_failed?: number;
+  traceEventCount?: number;
+  trace_event_count?: number;
+  latestTraceSeq?: number;
+  latest_trace_seq?: number;
+  traceStatus?: "idle" | "streaming" | "completed" | "failed";
+  trace_status?: "idle" | "streaming" | "completed" | "failed";
+  agentTrace?: unknown;
+  agent_trace?: unknown;
+  agentLogs?: unknown;
+  agent_logs?: unknown;
+  traceEvents?: StepTraceEventRecord[];
+  trace_events?: StepTraceEventRecord[];
   rawOutput?: string | null;
   raw_output?: string | null;
   parsedOutput?: unknown;
@@ -128,6 +161,24 @@ export interface StepExecutionRecord {
   started_at?: string | null;
   completedAt?: string | null;
   completed_at?: string | null;
+}
+
+export interface StepTraceEventRecord {
+  id: string;
+  stepExecutionId?: string;
+  step_execution_id?: string;
+  runId?: string;
+  run_id?: string;
+  stepId?: string;
+  step_id?: string;
+  seq: number;
+  stepSeq?: number;
+  step_seq?: number;
+  kind: string;
+  turn?: number | null;
+  payload?: unknown;
+  createdAt?: string;
+  created_at?: string;
 }
 
 export interface UserMe {
@@ -209,4 +260,27 @@ export interface AdminDiscountCode {
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ChatSession {
+  id: string;
+  userId: string;
+  pipelineId: string | null;
+  title: string | null;
+  modelId: string;
+  pipelineVersion: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  sessionId: string;
+  role: string;
+  content: string;
+  pipelineState: unknown;
+  pipelineVersion: number | null;
+  action: string | null;
+  createdAt: string;
 }

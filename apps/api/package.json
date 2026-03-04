@@ -10,12 +10,15 @@
     "migration:generate": "drizzle-kit generate --out drizzle --dialect postgresql --schema ./src/db/schema.ts",
     "rotate:master-key": "tsx src/scripts/rotate-master-key.ts",
     "seed": "tsx src/db/seed.ts",
+    "seed:templates": "tsx src/db/seed-templates.ts",
     "lint": "biome lint src",
     "typecheck": "tsc -b",
     "test": "bun test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
     "@hono/node-server": "^1.13.0",
+    "@stepiq/anyllm-runtime": "*",
     "@stepiq/core": "*",
     "bcrypt": "^5.1.0",
     "bullmq": "^5.30.0",
@@ -24,9 +27,11 @@
     "hono": "^4.7.0",
     "ioredis": "^5.4.0",
     "jose": "^6.0.0",
+    "openai": "^4.70.0",
     "postgres": "^3.4.0",
     "posthog-node": "^5.26.0",
     "stripe": "^17.0.0",
+    "yaml": "^2.8.2",
     "zod": "^3.24.0"
   },
   "devDependencies": {

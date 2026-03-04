@@ -139,6 +139,11 @@ export const PLAN_LIMITS: Record<
     max_runs_per_day: number;
     max_pipelines: number;
     max_steps_per_pipeline: number;
+    agent_max_turns: number;
+    agent_max_duration_seconds: number;
+    agent_max_tool_calls: number;
+    agent_tool_fee_cents: number;
+    credit_value_cents: number;
     cron_enabled: boolean;
     webhooks_enabled: boolean;
     api_enabled: boolean;
@@ -151,6 +156,11 @@ export const PLAN_LIMITS: Record<
     max_runs_per_day: 10,
     max_pipelines: 3,
     max_steps_per_pipeline: 5,
+    agent_max_turns: 3,
+    agent_max_duration_seconds: 120,
+    agent_max_tool_calls: 1,
+    agent_tool_fee_cents: 3,
+    credit_value_cents: 1,
     cron_enabled: false,
     webhooks_enabled: false,
     api_enabled: false,
@@ -162,6 +172,11 @@ export const PLAN_LIMITS: Record<
     max_runs_per_day: 100,
     max_pipelines: 10,
     max_steps_per_pipeline: 10,
+    agent_max_turns: 8,
+    agent_max_duration_seconds: 180,
+    agent_max_tool_calls: 3,
+    agent_tool_fee_cents: 2,
+    credit_value_cents: 1,
     cron_enabled: true,
     webhooks_enabled: true,
     api_enabled: true,
@@ -173,6 +188,11 @@ export const PLAN_LIMITS: Record<
     max_runs_per_day: 500,
     max_pipelines: -1, // unlimited
     max_steps_per_pipeline: 20,
+    agent_max_turns: 20,
+    agent_max_duration_seconds: 240,
+    agent_max_tool_calls: 10,
+    agent_tool_fee_cents: 1,
+    credit_value_cents: 0.8,
     cron_enabled: true,
     webhooks_enabled: true,
     api_enabled: true,
@@ -184,6 +204,11 @@ export const PLAN_LIMITS: Record<
     max_runs_per_day: -1,
     max_pipelines: -1,
     max_steps_per_pipeline: 50,
+    agent_max_turns: 20,
+    agent_max_duration_seconds: 500,
+    agent_max_tool_calls: 10,
+    agent_tool_fee_cents: 0,
+    credit_value_cents: 0.8,
     cron_enabled: true,
     webhooks_enabled: true,
     api_enabled: true,

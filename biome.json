@@ -9,7 +9,8 @@
       "*.min.js",
       "apps/app/dist",
       "apps/web/dist",
-      "apps/landing/.astro"
+      "apps/landing/.astro",
+      "apps/worker/src/agent-runtime/wasm_exec.js"
     ]
   },
   "organizeImports": { "enabled": true },

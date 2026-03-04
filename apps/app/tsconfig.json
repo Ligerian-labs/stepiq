@@ -1,11 +1,8 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "jsxImportSource": "react",
-    "target": "ES2022",
     "composite": true,
     "types": ["vite/client"],
     "rootDir": "src",

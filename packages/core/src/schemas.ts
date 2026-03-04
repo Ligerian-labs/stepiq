@@ -3,6 +3,7 @@ import {
   OUTPUT_FORMATS,
   PIPELINE_STATUSES,
   RUN_STATUSES,
+  SAFE_AGENT_TOOL_TYPES,
   STEP_TYPES,
 } from "./domain";
 
@@ -17,6 +18,28 @@ export const stepConditionSchema = z.object({
   if: z.string(),
   goto: z.string(),
   max_loops: z.number().int().min(1).max(10).optional(),
+});
+
+export const stepToolSchema = z.object({
+  type: z.enum(SAFE_AGENT_TOOL_TYPES),
+  name: z
+    .string()
+    .regex(
+      /^[a-zA-Z_][a-zA-Z0-9_]*$/,
+      "Tool name must be alphanumeric with underscores",
+    ),
+  description: z.string().max(500).optional(),
+  input_schema: z.record(z.unknown()).optional(),
+  js_source: z.string().max(50_000).optional(),
+});
+
+export const stepAgentSchema = z.object({
+  max_turns: z.number().int().min(1).max(50).default(8),
+  max_duration_seconds: z.number().int().min(1).max(600).optional(),
+  max_tool_calls: z.number().int().min(0).max(50).default(3),
+  allow_parallel_tools: z.boolean().default(false),
+  tools: z.array(stepToolSchema).max(30).optional(),
+  network_allowlist: z.array(z.string().min(1).max(255)).max(100).optional(),
 });
 
 export const pipelineStepSchema = z.object({
@@ -37,6 +60,7 @@ export const pipelineStepSchema = z.object({
   timeout_seconds: z.number().int().min(1).max(300).default(60),
   retry: stepRetrySchema.optional(),
   on_condition: z.array(stepConditionSchema).optional(),
+  agent: stepAgentSchema.optional(),
 });
 
 // ── Pipeline Definition Schema ──
@@ -84,6 +108,7 @@ export const pipelineDefinitionSchema = z.object({
     })
     .optional(),
   steps: z.array(pipelineStepSchema).min(1).max(20),
+  agent_defaults: stepAgentSchema.optional(),
   output: z
     .object({
       from: z.string(),

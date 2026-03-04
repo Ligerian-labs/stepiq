@@ -6,6 +6,7 @@ import type { Env } from "./lib/env.js";
 import { apiKeyRoutes } from "./routes/api-keys.js";
 import { authRoutes } from "./routes/auth.js";
 import { billingRoutes } from "./routes/billing.js";
+import { chatRoutes } from "./routes/chat.js";
 import { modelRoutes } from "./routes/models.js";
 import { pipelineRoutes } from "./routes/pipelines.js";
 import { runRoutes } from "./routes/runs.js";
@@ -41,6 +42,7 @@ app.get("/health", (c) => c.json({ status: "ok", version: "0.0.1" }));
 
 // Routes
 app.route("/api/auth", authRoutes);
+app.route("/api/chat", chatRoutes);
 app.route("/api/pipelines", pipelineRoutes);
 app.route("/api/runs", runRoutes);
 app.route("/api/schedules", scheduleRoutes);
