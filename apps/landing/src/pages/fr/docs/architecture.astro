@@ -1,0 +1,65 @@
+---
+import DocsLayout from "../../../layouts/DocsLayout.astro";
+---
+
+<DocsLayout title="Architecture" breadcrumb={[{ label: "Docs", href: "/docs" }, { label: "Architecture" }]}>
+  <h1 id="overview">Architecture</h1>
+  <p>stepIQ runs on a horizontally scalable architecture with stateless workers, Redis-backed queues, and PostgreSQL for persistent state.</p>
+
+  <h2 id="system-components">System components</h2>
+  <p>The platform consists of five main layers that work together to execute pipelines.</p>
+
+  <div class="docs-card-grid">
+    <div class="docs-card">
+      <h3>Frontend</h3>
+      <p>Astro 5 + React islands. Pipeline builder, run viewer, and dashboard.</p>
+      <span class="model-pricing">Astro + React</span>
+    </div>
+    <div class="docs-card">
+      <h3>API Server</h3>
+      <p>REST API with JWT auth. Handles CRUD, triggers, and SSE streaming.</p>
+      <span class="model-pricing">Node.js + Hono</span>
+    </div>
+    <div class="docs-card">
+      <h3>Data Layer</h3>
+      <p>PostgreSQL for state, Redis for queues and caching, S3/Minio for file storage.</p>
+      <span class="model-pricing">PG + Redis + S3</span>
+    </div>
+    <div class="docs-card">
+      <h3>Workers</h3>
+      <p>Stateless BullMQ workers that pick jobs from Redis. N instances, auto-scaling.</p>
+      <span class="model-pricing">BullMQ</span>
+    </div>
+    <div class="docs-card">
+      <h3>Model Router</h3>
+      <p>Unified proxy layer that routes to Anthropic, OpenAI, or local models.</p>
+      <span class="model-pricing">Multi-provider</span>
+    </div>
+  </div>
+
+  <h2 id="worker-flow">Worker flow</h2>
+  <p>When a pipeline run is triggered, this is the step-by-step execution flow inside a worker:</p>
+
+  <div class="flow-step"><span class="flow-num">1</span><span class="flow-text">Job picked up from Redis queue</span></div>
+  <div class="flow-step"><span class="flow-num">2</span><span class="flow-text">Load pipeline definition from pipeline_versions</span></div>
+  <div class="flow-step"><span class="flow-num">3</span><span class="flow-text">Create run record (status: running)</span></div>
+  <div class="flow-step"><span class="flow-num">4</span><span class="flow-text">For each step: interpolate vars, call model, parse output, emit SSE</span></div>
+  <div class="flow-step"><span class="flow-num">5</span><span class="flow-text">Deliver output (webhook, email, API response)</span></div>
+  <div class="flow-step"><span class="flow-num">6</span><span class="flow-text">Update run record, deduct user credits</span></div>
+
+  <h2 id="technology-choices">Technology choices</h2>
+  <p>Each layer of the stack was chosen for reliability, developer experience, and horizontal scalability.</p>
+
+  <table class="docs-table">
+    <thead><tr><th>Layer</th><th>Choice</th><th>Rationale</th></tr></thead>
+    <tbody>
+      <tr><td>Frontend</td><td>Astro + React</td><td>Island architecture for fast loads, React for interactive pipeline editor</td></tr>
+      <tr><td>API</td><td>Node.js + Hono</td><td>Lightweight framework with excellent TypeScript support and edge compatibility</td></tr>
+      <tr><td>Database</td><td>PostgreSQL + Drizzle</td><td>Relational integrity for pipeline definitions, type-safe ORM with migrations</td></tr>
+      <tr><td>Queue</td><td>Redis + BullMQ</td><td>Reliable job processing with retries, rate limiting, and priority queues</td></tr>
+      <tr><td>Storage</td><td>S3 / MinIO</td><td>S3-compatible object storage for pipeline artifacts, logs, and large outputs</td></tr>
+      <tr><td>Auth</td><td>JWT + bcrypt</td><td>Stateless authentication with secure password hashing and API key support</td></tr>
+      <tr><td>Validation</td><td>Zod</td><td>Runtime schema validation for API inputs, pipeline definitions, and config</td></tr>
+    </tbody>
+  </table>
+</DocsLayout>

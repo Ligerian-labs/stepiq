@@ -1,0 +1,173 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout
+  title="Privacy Policy — stepIQ"
+  description="Read how stepIQ handles account data, pipeline data, model-provider data flow, and security controls."
+  path="/fr/privacy" lang="fr"
+  keywords={["stepIQ privacy", "AI pipeline privacy", "data security"]}
+>
+  <div class="landing">
+    <!-- Header -->
+    <header class="header">
+      <a href="/" class="brand">
+        <span class="logo-icon">⚡</span>
+        stepIQ
+      </a>
+      <nav class="nav-links">
+        <a href="/#features">Features</a>
+        <a href="/#pricing">Pricing</a>
+        <a href="/docs">Docs</a>
+      </nav>
+      <div class="actions">
+        <a href="https://app.stepiq.sh" class="ghost-link">Log in</a>
+        <a href="https://app.stepiq.sh" class="solid-link">Get Started</a>
+      </div>
+    </header>
+
+    <main class="legal-page">
+      <h1>Privacy Policy</h1>
+      <p class="legal-updated">Last updated: February 25, 2026</p>
+
+      <section class="legal-section">
+        <h2>1. Who we are</h2>
+        <p>stepIQ is a product of <strong>Ligerian Labs</strong>, a brand of Pupuce CORP (EURL), registered in France. We operate the websites <code>stepiq.sh</code>, <code>app.stepiq.sh</code>, and <code>api.stepiq.sh</code>.</p>
+        <p><strong>Contact:</strong> <a href="mailto:bonjour@ligerianlabs.fr">bonjour@ligerianlabs.fr</a></p>
+      </section>
+
+      <section class="legal-section">
+        <h2>2. Data we collect</h2>
+        <h3>Account data</h3>
+        <p>When you create an account, we collect your email address and a hashed version of your password. We never store plaintext passwords.</p>
+        <h3>Pipeline data</h3>
+        <p>We store your pipeline definitions, execution logs, step outputs, and associated metadata. This data is necessary to provide the service.</p>
+        <h3>Usage data</h3>
+        <p>We collect anonymized analytics data including page views, feature usage, and performance metrics to improve the product. We use PostHog (EU-hosted) for this purpose.</p>
+        <h3>Payment data</h3>
+        <p>If you subscribe to a paid plan, payment processing is handled by our payment provider. We do not store your full credit card details.</p>
+      </section>
+
+      <section class="legal-section">
+        <h2>3. How we use your data</h2>
+        <ul>
+          <li>To provide and maintain the stepIQ service</li>
+          <li>To execute your AI pipelines by sending prompts to third-party model providers (Anthropic, OpenAI, Meta via inference partners)</li>
+          <li>To track credit usage and billing</li>
+          <li>To send transactional emails (account confirmation, password reset, usage alerts)</li>
+          <li>To improve the product based on aggregated, anonymized usage patterns</li>
+        </ul>
+      </section>
+
+      <section class="legal-section">
+        <h2>4. Third-party model providers</h2>
+        <p>When you run a pipeline, your prompts and inputs are sent to the AI model provider you selected (e.g., Anthropic, OpenAI). Each provider has its own data processing terms:</p>
+        <ul>
+          <li><strong>Anthropic</strong> — API inputs are not used for training. See <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">Anthropic's privacy policy</a>.</li>
+          <li><strong>OpenAI</strong> — API inputs are not used for training by default. See <a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener">OpenAI's privacy policy</a>.</li>
+          <li><strong>Meta Llama</strong> — Served via inference partners. Data handling depends on the partner.</li>
+        </ul>
+        <p>We recommend not including sensitive personal data in pipeline prompts unless you understand the downstream provider's data handling practices.</p>
+      </section>
+
+      <section class="legal-section">
+        <h2>5. Cookies</h2>
+        <p>We use strictly necessary cookies for authentication (JWT session tokens). We use PostHog for analytics, which may set cookies for session tracking. No advertising cookies are used.</p>
+      </section>
+
+      <section class="legal-section">
+        <h2>6. Data retention</h2>
+        <p>Account data is retained for the lifetime of your account. Pipeline execution logs are retained for 90 days on the Free plan and 1 year on paid plans. You can request deletion of your data at any time.</p>
+      </section>
+
+      <section class="legal-section">
+        <h2>7. Your rights (GDPR)</h2>
+        <p>If you are in the European Economic Area, you have the right to:</p>
+        <ul>
+          <li><strong>Access</strong> — Request a copy of your personal data</li>
+          <li><strong>Rectification</strong> — Correct inaccurate data</li>
+          <li><strong>Erasure</strong> — Request deletion of your data</li>
+          <li><strong>Portability</strong> — Export your pipeline definitions and data</li>
+          <li><strong>Object</strong> — Object to processing based on legitimate interests</li>
+          <li><strong>Restriction</strong> — Request limitation of processing</li>
+        </ul>
+        <p>To exercise any of these rights, contact us at <a href="mailto:bonjour@ligerianlabs.fr">bonjour@ligerianlabs.fr</a>. We will respond within 30 days.</p>
+      </section>
+
+      <section class="legal-section">
+        <h2>8. Data security</h2>
+        <p>We use industry-standard security measures including:</p>
+        <ul>
+          <li>TLS encryption for all data in transit</li>
+          <li>AES-256-GCM encryption for stored secrets and API keys</li>
+          <li>Bcrypt password hashing</li>
+          <li>Infrastructure hosted in European data centers</li>
+        </ul>
+      </section>
+
+      <section class="legal-section">
+        <h2>9. Changes to this policy</h2>
+        <p>We may update this privacy policy from time to time. We will notify you of material changes via email or in-app notification. Continued use of the service after changes constitutes acceptance.</p>
+      </section>
+
+      <section class="legal-section">
+        <h2>10. Contact</h2>
+        <p>For any questions about this privacy policy or your data, contact us at:</p>
+        <p><strong>Ligerian Labs (Pupuce CORP EURL)</strong><br/>
+        Email: <a href="mailto:bonjour@ligerianlabs.fr">bonjour@ligerianlabs.fr</a><br/>
+        Angers, France</p>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-logo-row">
+            <span class="logo-icon" style="width:1.75rem;height:1.75rem;font-size:0.7rem;">⚡</span>
+            <span class="brand-name">stepIQ</span>
+          </div>
+          <p class="footer-tagline">Zapier for AI — AI-native, server-side, and model-agnostic.</p>
+        </div>
+        <div class="footer-links">
+          <div class="footer-col">
+            <h4>Product</h4>
+            <a href="/#features">Features</a>
+            <a href="/#pricing">Pricing</a>
+            <a href="#">Templates</a>
+            <a href="#">Changelog</a>
+          </div>
+          <div class="footer-col">
+            <h4>Developers</h4>
+            <a href="/docs">Documentation</a>
+            <a href="/docs/api-reference">API Reference</a>
+            <a href="#">Status</a>
+            <a href="https://github.com/Ligerian-labs/automate" target="_blank" rel="noopener">GitHub</a>
+          </div>
+          <div class="footer-col">
+            <h4>Company</h4>
+            <a href="#">About</a>
+            <a href="#">Blog</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-divider"></div>
+      <div class="footer-bottom">
+        <p class="footer-copy">© 2026 Ligerian Labs. All rights reserved.</p>
+        <div class="footer-social">
+          <a href="https://github.com/Ligerian-labs/automate" target="_blank" rel="noopener" aria-label="GitHub">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
+          </a>
+          <a href="#" aria-label="Twitter">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"></path></svg>
+          </a>
+          <a href="#" aria-label="LinkedIn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect width="4" height="12" x="2" y="9"></rect><circle cx="4" cy="4" r="2"></circle></svg>
+          </a>
+        </div>
+      </div>
+    </footer>
+  </div>
+</Layout>
