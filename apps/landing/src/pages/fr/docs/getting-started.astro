@@ -1,0 +1,100 @@
+---
+import DocsLayout from "../../../layouts/DocsLayout.astro";
+
+const codeExample = `<span class="hl-key">name:</span> "summarize-article"
+<span class="hl-key">version:</span> 1
+
+<span class="hl-key">input:</span>
+  <span class="hl-key">schema:</span>
+    article_url:
+      type: string
+
+<span class="hl-key">steps:</span>
+  - id: summarize
+    model: claude-sonnet-4
+    prompt: |
+      Summarize this article in 3 bullets:
+      {{input.article_url}}
+    output_format: markdown`;
+---
+
+<DocsLayout title="Getting Started" breadcrumb={[{ label: "Docs", href: "/docs" }, { label: "Getting Started" }]}>
+  <h1 id="overview">Getting Started</h1>
+  <p>Create your first AI pipeline in under 5 minutes. This guide walks you through account setup, writing your first pipeline definition, running it, and viewing the results.</p>
+
+  <h2 id="prerequisites">Prerequisites</h2>
+  <p>Before you start, you'll need:</p>
+  <ul>
+    <li>A stepIQ account (free tier works)</li>
+    <li>Basic understanding of YAML or JSON syntax</li>
+    <li>An idea for an AI workflow (or just use our example)</li>
+  </ul>
+
+  <p class="docs-step-kicker">Step 1</p>
+  <h2 id="create-account">Create an account</h2>
+  <p>Sign up at <a href="https://app.stepiq.io">app.stepiq.io</a> with your email address. You'll get 100 free credits to start — enough to run several pipeline tests.</p>
+
+  <p class="docs-step-kicker">Step 2</p>
+  <h2 id="first-pipeline">Write your first pipeline</h2>
+  <p>Create a new pipeline from the dashboard, or write a YAML definition. Here's a minimal example:</p>
+
+  <div class="code-card">
+    <div class="code-header">
+      <div class="code-dots"><span class="code-dot red"></span><span class="code-dot yellow"></span><span class="code-dot green"></span></div>
+      <span class="code-filename">my-first-pipeline.yaml</span>
+    </div>
+    <pre class="code-body"><code set:html={codeExample} /></pre>
+  </div>
+
+  <p class="docs-step-kicker">Step 3</p>
+  <h2 id="run">Run the pipeline</h2>
+  <p>Click "Run" from the dashboard or trigger via API. Provide the required inputs and watch the execution in real-time with SSE streaming.</p>
+
+  <h3 id="scheduling">Trigger methods</h3>
+  <table class="docs-table">
+    <thead><tr><th>Method</th><th>How</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Manual</strong></td><td>Dashboard UI</td></tr>
+      <tr><td><strong>API</strong></td><td><code>POST /api/pipelines/:id/run</code></td></tr>
+      <tr><td><strong>Cron</strong></td><td>Scheduled execution</td></tr>
+      <tr><td><strong>Webhook</strong></td><td>Inbound HTTP trigger</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="webhook-trigger-quickstart">Inbound webhook quickstart</h3>
+  <p>Create an API key in <strong>Settings → API Keys</strong>, then trigger your pipeline from any external HTTP client:</p>
+  <p><strong>Plan note:</strong> webhooks are available on <code>starter</code>, <code>pro</code>, and <code>enterprise</code> plans, and not available on <code>free</code>.</p>
+  <div class="code-card">
+    <pre class="code-body"><code>curl -X POST "https://api.stepiq.sh/v1/api/webhooks/&lt;pipeline-id&gt;" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: sk_live_xxxxxxxx" \
+  -d '&#123;"input_data":&#123;"article_url":"https://example.com/blog-post"&#125;&#125;'</code></pre>
+  </div>
+  <p>The API returns <code>202 Accepted</code> with a <code>run_id</code> you can track via <code>GET /api/runs/:id</code>.</p>
+
+  <p class="docs-step-kicker">Step 4</p>
+  <h2 id="results">View results</h2>
+  <p>Each run shows a detailed step-by-step execution log. For every step you can see:</p>
+  <ul>
+    <li>The interpolated prompt sent to each model</li>
+    <li>Raw and parsed output (JSON or markdown)</li>
+    <li>Token counts (input + output) and cost in credits</li>
+    <li>Duration, retry count, and status per step</li>
+  </ul>
+
+  <h2 id="next-steps">Next steps</h2>
+  <div class="docs-card-grid">
+    <a href="/docs/pipeline-format" class="docs-card">
+      <h3>Pipeline Format</h3>
+      <p>Deep dive into YAML schema</p>
+    </a>
+    <a href="/docs/api-reference" class="docs-card">
+      <h3>API Reference</h3>
+      <p>Automate with REST API</p>
+    </a>
+    <a href="/docs/models-pricing" class="docs-card">
+      <h3>Models & Pricing</h3>
+      <p>Choose the right model</p>
+    </a>
+  </div>
+</DocsLayout>

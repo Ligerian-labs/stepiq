@@ -1,0 +1,151 @@
+---
+import DocsLayout from "../../../layouts/DocsLayout.astro";
+---
+
+<DocsLayout title="API Reference" breadcrumb={[{ label: "Docs", href: "/docs" }, { label: "API Reference" }]}>
+  <h1 id="overview">API Reference</h1>
+  <p>The stepIQ REST API lets you manage pipelines, trigger runs, and query results programmatically. All endpoints return JSON.</p>
+
+  <div class="docs-info-box">
+    <strong>Base URL:</strong> <code>https://api.stepiq.sh/v1</code>
+  </div>
+
+  <h2 id="authentication">Authentication</h2>
+  <p>All API requests must include an authorization header. Two methods are supported:</p>
+
+  <table class="docs-table">
+    <thead><tr><th>Method</th><th>Header</th><th>How to get</th></tr></thead>
+    <tbody>
+      <tr><td>JWT Token</td><td><code>Authorization: Bearer &lt;jwt_token&gt;</code></td><td><code>POST /api/auth/login</code></td></tr>
+      <tr><td>API Key</td><td><code>X-API-Key: sk_live_xxxxxxxx</code></td><td>Settings - API Keys</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Auth endpoints</h3>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/auth/register</span><span class="endpoint-desc">Email + password signup</span></div>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/auth/login</span><span class="endpoint-desc">Returns JWT token</span></div>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/auth/refresh</span><span class="endpoint-desc">Refresh JWT token</span></div>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/auth/forgot-password</span><span class="endpoint-desc">Send reset email</span></div>
+
+  <h2 id="pipelines">Pipelines</h2>
+  <div class="endpoint-row"><span class="docs-badge get">GET</span><span class="endpoint-path">/api/pipelines</span><span class="endpoint-desc">List user's pipelines</span></div>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/pipelines</span><span class="endpoint-desc">Create pipeline (JSON or YAML body)</span></div>
+  <div class="endpoint-row"><span class="docs-badge get">GET</span><span class="endpoint-path">/api/pipelines/:id</span><span class="endpoint-desc">Get pipeline details</span></div>
+  <div class="endpoint-row"><span class="docs-badge put">PUT</span><span class="endpoint-path">/api/pipelines/:id</span><span class="endpoint-desc">Update pipeline (creates new version)</span></div>
+  <div class="endpoint-row"><span class="docs-badge delete">DELETE</span><span class="endpoint-path">/api/pipelines/:id</span><span class="endpoint-desc">Archive pipeline (soft delete)</span></div>
+
+  <h2 id="execution">Execution</h2>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/pipelines/:id/run</span><span class="endpoint-desc">Trigger a run</span></div>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/webhooks/:pipelineId</span><span class="endpoint-desc">Trigger a run via inbound webhook (API key)</span></div>
+  <div class="endpoint-row"><span class="docs-badge get">GET</span><span class="endpoint-path">/api/runs</span><span class="endpoint-desc">List runs (filterable)</span></div>
+  <div class="endpoint-row"><span class="docs-badge get">GET</span><span class="endpoint-path">/api/runs/:id</span><span class="endpoint-desc">Get run details + step executions</span></div>
+  <div class="endpoint-row"><span class="docs-badge get">GET</span><span class="endpoint-path">/api/runs/:id/stream</span><span class="endpoint-desc">SSE stream for real-time updates</span></div>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/runs/:id/cancel</span><span class="endpoint-desc">Cancel a running pipeline</span></div>
+
+  <h2 id="schedules">Schedules</h2>
+  <div class="endpoint-row"><span class="docs-badge get">GET</span><span class="endpoint-path">/api/pipelines/:id/schedules</span><span class="endpoint-desc">List schedules</span></div>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/pipelines/:id/schedules</span><span class="endpoint-desc">Create schedule</span></div>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/schedules/:id/enable</span><span class="endpoint-desc">Enable schedule</span></div>
+  <div class="endpoint-row"><span class="docs-badge get">GET</span><span class="endpoint-path">/api/schedules/upcoming</span><span class="endpoint-desc">List next scheduled runs</span></div>
+
+  <h2 id="user-secrets">User & Secrets</h2>
+  <div class="endpoint-row"><span class="docs-badge get">GET</span><span class="endpoint-path">/api/user/me</span><span class="endpoint-desc">Current user profile</span></div>
+  <div class="endpoint-row"><span class="docs-badge get">GET</span><span class="endpoint-path">/api/user/usage</span><span class="endpoint-desc">Usage stats (tokens, cost, runs)</span></div>
+  <div class="endpoint-row"><span class="docs-badge get">GET</span><span class="endpoint-path">/api/user/api-keys</span><span class="endpoint-desc">List API keys (metadata only)</span></div>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/user/api-keys</span><span class="endpoint-desc">Create API key</span></div>
+  <div class="endpoint-row"><span class="docs-badge delete">DELETE</span><span class="endpoint-path">/api/user/api-keys/:id</span><span class="endpoint-desc">Revoke API key</span></div>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/user/secrets</span><span class="endpoint-desc">Create/update encrypted secret</span></div>
+
+  <h2 id="models">Models</h2>
+  <p>Use model discovery endpoints to list supported providers and model capabilities before pipeline execution.</p>
+
+  <h2 id="webhooks">Webhooks</h2>
+  <p>Use webhooks to trigger pipelines from external systems and to receive pipeline output in your own services.</p>
+  <p><strong>Plan availability:</strong> webhooks are available on <code>starter</code>, <code>pro</code>, and <code>enterprise</code> plans. They are not available on the <code>free</code> plan.</p>
+
+  <h3 id="inbound-webhook">Inbound webhook trigger</h3>
+  <div class="endpoint-row"><span class="docs-badge post">POST</span><span class="endpoint-path">/api/webhooks/:pipelineId</span><span class="endpoint-desc">Create a pending run and enqueue execution</span></div>
+
+  <table class="docs-table">
+    <thead><tr><th>Item</th><th>Details</th></tr></thead>
+    <tbody>
+      <tr><td>Authentication</td><td><code>X-API-Key: sk_live_...</code></td></tr>
+      <tr><td>Payload format</td><td><code>&#123;"input_data":&#123;...&#125;&#125;</code> (recommended) or top-level JSON object</td></tr>
+      <tr><td>Success</td><td><code>202 Accepted</code> with run metadata</td></tr>
+      <tr><td>Validation</td><td>If <code>input.schema</code> exists, payload must match it</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>Request example</strong></p>
+  <div class="code-card">
+    <pre class="code-body"><code>curl -X POST "https://api.stepiq.sh/v1/api/webhooks/&lt;pipeline-id&gt;" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: sk_live_xxxxxxxx" \
+  -d '&#123;"input_data":&#123;"topic":"AI agents","language":"en"&#125;&#125;'</code></pre>
+  </div>
+
+  <p><strong>Response example (202)</strong></p>
+  <div class="code-card">
+    <pre class="code-body"><code>{`{
+  "accepted": true,
+  "run_id": "b0b0b0b0-c1c1-d2d2-e3e3-f4f4f4f4f4f4",
+  "status": "pending",
+  "pipeline_id": "a0a0a0a0-b1b1-c2c2-d3d3-e4e4e4e4e4e4"
+}`}</code></pre>
+  </div>
+
+  <table class="docs-table">
+    <thead><tr><th>Status</th><th>When</th></tr></thead>
+    <tbody>
+      <tr><td><code>401</code></td><td>Missing or invalid API key</td></tr>
+      <tr><td><code>404</code></td><td>Pipeline not found or not active</td></tr>
+      <tr><td><code>422</code></td><td>Payload does not match <code>input.schema</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="outbound-webhook">Outbound webhook delivery</h3>
+  <p>Configure this in pipeline output delivery (<code>type: webhook</code>). stepIQ sends an event when a run completes.</p>
+
+  <table class="docs-table">
+    <thead><tr><th>Item</th><th>Details</th></tr></thead>
+    <tbody>
+      <tr><td>Trigger</td><td>Run completion</td></tr>
+      <tr><td>Retry policy</td><td>Up to 4 attempts, exponential backoff (1s, 2s, 4s)</td></tr>
+      <tr><td>Timeout</td><td>10 seconds per attempt</td></tr>
+      <tr><td>Retry conditions</td><td>Network errors and <code>5xx</code> responses</td></tr>
+      <tr><td>Required config</td><td><code>signing_secret_name</code> in webhook delivery target</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>Sent headers</strong></p>
+  <table class="docs-table">
+    <thead><tr><th>Header</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td><code>Content-Type</code></td><td><code>application/json</code></td></tr>
+      <tr><td><code>X-StepIQ-Event</code></td><td><code>pipeline.run.completed</code></td></tr>
+      <tr><td><code>X-StepIQ-Timestamp</code></td><td>Unix seconds</td></tr>
+      <tr><td><code>X-StepIQ-Signature</code></td><td><code>v1=&lt;hmac_sha256_hex&gt;</code></td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>Payload example</strong></p>
+  <div class="code-card">
+    <pre class="code-body"><code>{`{
+  "event": "pipeline.run.completed",
+  "pipeline": { "id": "...", "version": 1, "name": "My Pipeline" },
+  "run": {
+    "id": "...",
+    "status": "completed",
+    "trigger_type": "webhook",
+    "started_at": "2026-02-27T10:00:00.000Z",
+    "completed_at": "2026-02-27T10:00:04.000Z"
+  },
+  "input": { "...": "..." },
+  "output": { "...": "..." },
+  "meta": { "sent_at": "2026-02-27T10:00:04.500Z", "attempt": 1 }
+}`}</code></pre>
+  </div>
+
+  <p><strong>Signature verification:</strong> <code>HMAC_SHA256(signing_secret, "&lt;timestamp&gt;.&lt;raw_json_body&gt;")</code> and compare with <code>X-StepIQ-Signature</code>.</p>
+  <p><strong>Receiver behavior:</strong> return <code>2xx</code> after success, <code>5xx</code> to request retry, and deduplicate by <code>run.id</code>.</p>
+</DocsLayout>
