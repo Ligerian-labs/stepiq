@@ -13,6 +13,7 @@ import { initAnalytics, trackPageView } from "./lib/analytics";
 import { isAuthenticated } from "./lib/auth";
 import { AdminPage } from "./pages/admin";
 import { AuthPage } from "./pages/auth-page";
+import { BuilderPage } from "./pages/builder";
 import { DashboardPage } from "./pages/dashboard";
 import { NewSchedulePage } from "./pages/new-schedule";
 import { NotFoundPage } from "./pages/not-found";
@@ -104,6 +105,20 @@ const editorRoute = createRoute({
   component: PipelineEditorPage,
 });
 
+const builderRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/builder",
+  beforeLoad: requireAuth,
+  component: BuilderPage,
+});
+
+const builderSessionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/builder/$sessionId",
+  beforeLoad: requireAuth,
+  component: BuilderPage,
+});
+
 const runsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/runs",
@@ -155,6 +170,8 @@ const routeTree = rootRoute.addChildren([
   dashboardRoute,
   pipelinesRoute,
   editorRoute,
+  builderRoute,
+  builderSessionRoute,
   runsRoute,
   runRoute,
   schedulesRoute,

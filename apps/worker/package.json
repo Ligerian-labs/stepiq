@@ -3,8 +3,9 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
+    "build:agent-wasm": "bun run --filter @stepiq/anyllm-runtime build:wasm",
     "dev": "tsx watch src/index.ts",
-    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "build": "bun run build:agent-wasm && rm -rf dist && tsc -p tsconfig.json && mkdir -p dist/agent-runtime && cp ../../packages/anyllm-runtime/src/agent.wasm ../../packages/anyllm-runtime/src/wasm_exec.js dist/agent-runtime/",
     "start": "node dist/index.js",
     "lint": "biome lint src",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -15,6 +16,7 @@
     "@google/genai": "^1.43.0",
     "@mistralai/mistralai": "^1.14.1",
     "@stepiq/api": "*",
+    "@stepiq/anyllm-runtime": "*",
     "@stepiq/core": "*",
     "bullmq": "^5.30.0",
     "cron-parser": "^5.0.0",
@@ -23,7 +25,8 @@
     "ioredis": "^5.4.0",
     "openai": "^4.80.0",
     "postgres": "^3.4.0",
-    "posthog-node": "^5.26.0"
+    "posthog-node": "^5.26.0",
+    "quickjs-emscripten": "^0.31.0"
   },
   "devDependencies": {
     "tsx": "^4.19.0"

@@ -184,6 +184,44 @@ describe("pipelineDefinitionSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("accepts supported agent tools", () => {
+    const result = pipelineDefinitionSchema.safeParse({
+      name: "Agent Pipeline",
+      version: 1,
+      steps: [
+        {
+          id: "s1",
+          name: "Fetch",
+          type: "llm",
+          prompt: "Fetch data",
+          agent: {
+            tools: [{ type: "http_request", name: "fetch_page" }],
+          },
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unsupported agent tools", () => {
+    const result = pipelineDefinitionSchema.safeParse({
+      name: "Agent Pipeline",
+      version: 1,
+      steps: [
+        {
+          id: "s1",
+          name: "Fetch",
+          type: "llm",
+          prompt: "Fetch data",
+          agent: {
+            tools: [{ type: "js", name: "run_script" }],
+          },
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("createApiKeySchema", () => {

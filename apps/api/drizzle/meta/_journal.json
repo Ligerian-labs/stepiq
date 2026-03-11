@@ -57,6 +57,34 @@
       "when": 1772417400000,
       "tag": "0007_run_funding_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1772578600000,
+      "tag": "0008_agent_runtime",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1772580000000,
+      "tag": "0009_agent_logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1772717363962,
+      "tag": "0010_familiar_quentin_quire",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1772804965430,
+      "tag": "0011_noisy_thunderball",
+      "breakpoints": true
     }
   ]
 }

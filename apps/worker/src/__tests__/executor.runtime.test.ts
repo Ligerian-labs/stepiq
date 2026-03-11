@@ -16,6 +16,7 @@ const tables = {
     version: "pipelineVersions.version",
   },
   stepExecutions: { __name: "stepExecutions", id: "stepExecutions.id" },
+  stepTraceEvents: { __name: "stepTraceEvents", id: "stepTraceEvents.id" },
   userSecrets: {
     __name: "userSecrets",
     userId: "userSecrets.userId",
@@ -31,6 +32,8 @@ type StepExecRow = {
   stepId: string;
   status: string;
   promptSent?: string;
+  rawOutput?: string;
+  parsedOutput?: unknown;
   error?: string;
 };
 
@@ -44,6 +47,19 @@ type TestState = {
     pipelineId?: string | null;
   }>;
   stepExecutions: StepExecRow[];
+  stepTraceEvents: Array<Record<string, unknown>>;
+  lastAgentRequest: Record<string, unknown> | null;
+  runAgentRuntimeImpl: (req: Record<string, unknown>) => Promise<{
+    output: string;
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    tool_calls_total: number;
+    tool_calls_success: number;
+    tool_calls_failed: number;
+    turns_used: number;
+    trace: unknown;
+  }>;
   lastModelRequest: Record<string, unknown> | null;
   callModelImpl: (req: Record<string, unknown>) => Promise<{
     output: string;
@@ -99,19 +115,25 @@ function createDbMock() {
       }),
     }),
     insert: (table: { __name: string }) => ({
-      values: (values: Record<string, unknown>) => ({
-        returning: async () => {
-          if (table.__name !== "stepExecutions") return [];
-          const row: StepExecRow = {
-            id: `se-${state.stepExecutions.length + 1}`,
-            runId: String(values.runId),
-            stepId: String(values.stepId),
-            status: String(values.status),
-          };
-          state.stepExecutions.push(row);
-          return [row];
-        },
-      }),
+      values: (values: Record<string, unknown>) => {
+        if (table.__name === "stepTraceEvents") {
+          state.stepTraceEvents.push(values);
+          return Promise.resolve([]);
+        }
+        return {
+          returning: async () => {
+            if (table.__name !== "stepExecutions") return [];
+            const row: StepExecRow = {
+              id: `se-${state.stepExecutions.length + 1}`,
+              runId: String(values.runId),
+              stepId: String(values.stepId),
+              status: String(values.status),
+            };
+            state.stepExecutions.push(row);
+            return [row];
+          },
+        };
+      },
     }),
     update: (table: { __name: string; id?: string }) => ({
       set: (setValues: Record<string, unknown>) => ({
@@ -171,6 +193,12 @@ mock.module("../model-router.js", () => ({
     return state.callModelImpl(req);
   },
 }));
+mock.module("../agent-runtime/runtime.js", () => ({
+  runAgentRuntime: (req: Record<string, unknown>) => {
+    state.lastAgentRequest = req;
+    return state.runAgentRuntimeImpl(req);
+  },
+}));
 mock.module("../core-adapter.js", () => ({
   PLAN_LIMITS: {
     free: { overage_per_credit_cents: 0 },
@@ -178,6 +206,25 @@ mock.module("../core-adapter.js", () => ({
     pro: { overage_per_credit_cents: 0.8 },
     enterprise: { overage_per_credit_cents: 0 },
   },
+  MARKUP_PERCENTAGE: 25,
+  SAFE_AGENT_TOOL_TYPES: [
+    "http_request",
+    "extract_json",
+    "template_render",
+    "curl",
+  ],
+  SUPPORTED_MODELS: [
+    {
+      id: "gpt-5.2",
+      input_cost_per_million: 1750,
+      output_cost_per_million: 14000,
+    },
+    {
+      id: "gpt-4o-mini",
+      input_cost_per_million: 150,
+      output_cost_per_million: 600,
+    },
+  ],
   TOKENS_PER_CREDIT: 1000,
   providerSecretNames: (provider: string) => {
     if (provider === "openai") return ["OPENAI_API_KEY", "openai_api_key"];
@@ -256,6 +303,11 @@ describe("executePipeline runtime behavior", () => {
         },
       ],
       stepExecutions: [],
+      stepTraceEvents: [],
+      lastAgentRequest: null,
+      runAgentRuntimeImpl: async () => {
+        throw new Error("agent runtime unavailable");
+      },
       lastModelRequest: null,
       callModelImpl: async () => ({
         output: "model-output",
@@ -276,6 +328,7 @@ describe("executePipeline runtime behavior", () => {
     expect(state.user?.creditsRemaining).toBe(9);
 
     expect(state.stepExecutions).toHaveLength(2);
+    expect(state.stepTraceEvents.length).toBeGreaterThan(0);
     expect(state.stepExecutions[0]?.status).toBe("completed");
     expect(state.stepExecutions[1]?.status).toBe("completed");
     expect(state.stepExecutions[0]?.promptSent).not.toContain(
@@ -362,6 +415,182 @@ describe("executePipeline runtime behavior", () => {
     expect(state.stepExecutions[0]?.status).toBe("failed");
     expect(String(state.stepExecutions[0]?.error || "")).toContain(
       "[REDACTED]",
+    );
+  });
+
+  it("salvages successful tool output when agent runtime times out after tool activity", async () => {
+    state.definition = {
+      name: "Agent timeout pipeline",
+      version: 1,
+      steps: [
+        {
+          id: "s1",
+          type: "llm",
+          model: "gpt-4o-mini",
+          prompt: "Fetch and summarize",
+        },
+      ],
+    };
+    state.runAgentRuntimeImpl = async (req) => {
+      const onLog =
+        typeof req.on_log === "function"
+          ? (req.on_log as (entry: Record<string, unknown>) => void)
+          : null;
+      onLog?.({
+        ts: new Date().toISOString(),
+        level: "info",
+        source: "tool_bridge",
+        event: "tool_call_completed",
+        message: "Tool call completed",
+        data: {
+          tool: "fetch_page",
+          status: 200,
+          result: { ok: true, status: 200, body: "<html>ok</html>" },
+        },
+      });
+      throw new Error("provider_error: context deadline exceeded");
+    };
+
+    await executePipeline("run-1");
+
+    expect(state.run?.status).toBe("completed");
+    expect(state.lastModelRequest).toBeNull();
+    expect(state.stepExecutions).toHaveLength(1);
+    expect(state.stepExecutions[0]?.status).toBe("completed");
+    expect(state.stepExecutions[0]?.parsedOutput).toEqual({
+      ok: true,
+      status: 200,
+      body: "<html>ok</html>",
+    });
+    expect(
+      state.stepTraceEvents.some(
+        (event) => event.kind === "tool.result.completed",
+      ),
+    ).toBe(true);
+    expect(state.run?.outputData).toEqual({
+      ok: true,
+      status: 200,
+      body: "<html>ok</html>",
+    });
+  });
+
+  it("falls back to direct model call when agent runtime fails early without timeout or tool activity", async () => {
+    state.definition = {
+      name: "Early agent failure pipeline",
+      version: 1,
+      steps: [
+        {
+          id: "s1",
+          type: "llm",
+          model: "gpt-4o-mini",
+          prompt: "Simple prompt",
+        },
+      ],
+    };
+    state.runAgentRuntimeImpl = async () => {
+      throw new Error("temporary runtime bootstrap error");
+    };
+
+    await executePipeline("run-1");
+
+    expect(state.run?.status).toBe("completed");
+    expect(state.stepExecutions).toHaveLength(1);
+    expect(state.stepExecutions[0]?.status).toBe("completed");
+    expect(
+      state.stepTraceEvents.some((event) => event.kind === "fallback.started"),
+    ).toBe(true);
+    expect(
+      state.stepTraceEvents.some(
+        (event) => event.kind === "fallback.completed",
+      ),
+    ).toBe(true);
+    expect(state.lastModelRequest).not.toBeNull();
+  });
+
+  it("fails step on timeout when no successful tool result can be salvaged", async () => {
+    state.definition = {
+      name: "Timeout without successful tool result pipeline",
+      version: 1,
+      steps: [
+        {
+          id: "s1",
+          type: "llm",
+          model: "gpt-4o-mini",
+          prompt: "Simple prompt",
+        },
+      ],
+    };
+    state.runAgentRuntimeImpl = async (req) => {
+      const onLog =
+        typeof req.on_log === "function"
+          ? (req.on_log as (entry: Record<string, unknown>) => void)
+          : null;
+      onLog?.({
+        ts: new Date().toISOString(),
+        level: "error",
+        source: "tool_bridge",
+        event: "tool_call_failed",
+        message: "Tool call failed",
+        data: { tool: "fetch_page", error: "upstream 500" },
+      });
+      throw new Error("provider_error: context deadline exceeded");
+    };
+
+    await executePipeline("run-1");
+
+    expect(state.run?.status).toBe("failed");
+    expect(String(state.run?.error || "")).toContain('Step "s1" failed');
+    expect(state.lastModelRequest).toBeNull();
+    expect(state.stepExecutions).toHaveLength(1);
+    expect(state.stepExecutions[0]?.status).toBe("failed");
+  });
+
+  it("fails runs that use unsupported agent tool types", async () => {
+    state.definition = {
+      name: "Unsafe tool pipeline",
+      version: 1,
+      steps: [
+        {
+          id: "s1",
+          type: "llm",
+          model: "gpt-4o-mini",
+          prompt: "Do work",
+          agent: {
+            tools: [{ type: "js", name: "run_script", js_source: "() => 1" }],
+          },
+        },
+      ],
+    };
+
+    await executePipeline("run-1");
+
+    expect(state.run?.status).toBe("failed");
+    expect(String(state.run?.error || "")).toContain("Unsupported agent tool types");
+  });
+
+  it("fails runs that request parallel tools", async () => {
+    state.definition = {
+      name: "Parallel tool pipeline",
+      version: 1,
+      steps: [
+        {
+          id: "s1",
+          type: "llm",
+          model: "gpt-4o-mini",
+          prompt: "Do work",
+          agent: {
+            allow_parallel_tools: true,
+            tools: [{ type: "http_request", name: "fetch_page" }],
+          },
+        },
+      ],
+    };
+
+    await executePipeline("run-1");
+
+    expect(state.run?.status).toBe("failed");
+    expect(String(state.run?.error || "")).toContain(
+      "allow_parallel_tools is not supported",
     );
   });
 
@@ -477,6 +706,8 @@ describe("executePipeline runtime behavior", () => {
   });
 
   it("uses app funding mode with env keys and deducts cost-based credits", async () => {
+    const previousOpenAiApiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "platform-openai-key";
     state.run = {
       ...(state.run || {}),
       fundingMode: "app_credits",
@@ -511,15 +742,23 @@ describe("executePipeline runtime behavior", () => {
       cost_cents: 5,
     });
 
-    await executePipeline("run-1");
+    try {
+      await executePipeline("run-1");
 
-    const apiKeys = (state.lastModelRequest?.api_keys || {}) as Record<
-      string,
-      string
-    >;
-    expect(apiKeys.openai === undefined || apiKeys.openai === "").toBe(true);
-    expect(state.user?.creditsRemaining).toBe(5);
-    expect(state.run?.creditsDeducted).toBe(5);
+      const apiKeys = (state.lastModelRequest?.api_keys || {}) as Record<
+        string,
+        string
+      >;
+      expect(apiKeys.openai).toBe("platform-openai-key");
+      expect(state.user?.creditsRemaining).toBe(5);
+      expect(state.run?.creditsDeducted).toBe(5);
+    } finally {
+      if (previousOpenAiApiKey === undefined) {
+        process.env.OPENAI_API_KEY = undefined;
+      } else {
+        process.env.OPENAI_API_KEY = previousOpenAiApiKey;
+      }
+    }
   });
 
   it("does not deduct credits when run is BYOK funded", async () => {

@@ -35,6 +35,26 @@ export type Plan = (typeof PLANS)[number];
 
 export type RunFundingMode = "legacy" | "app_credits" | "byok_required";
 
+export type StepTraceStatus = "idle" | "streaming" | "completed" | "failed";
+
+export type TraceEventKind =
+  | "step.started"
+  | "step.completed"
+  | "step.failed"
+  | "agent.started"
+  | "agent.completed"
+  | "agent.failed"
+  | "turn.started"
+  | "turn.completed"
+  | "assistant.text.completed"
+  | "assistant.reasoning.completed"
+  | "tool.call.started"
+  | "tool.call.arguments.completed"
+  | "tool.result.completed"
+  | "tool.result.failed"
+  | "fallback.started"
+  | "fallback.completed";
+
 // ── Pipeline Definition ──
 
 export interface PipelineVariable {
@@ -119,6 +139,9 @@ export interface Run {
   error: string | null;
   total_tokens: number;
   total_cost_cents: number;
+  model_cost_cents: number;
+  tool_cost_cents: number;
+  tool_calls_total: number;
   funding_mode: RunFundingMode;
   credits_deducted: number;
   started_at: string | null;
@@ -139,11 +162,34 @@ export interface StepExecution {
   input_tokens: number;
   output_tokens: number;
   cost_cents: number;
+  model_cost_cents: number;
+  tool_cost_cents: number;
+  tool_calls_total: number;
+  tool_calls_success: number;
+  tool_calls_failed: number;
+  trace_event_count?: number;
+  latest_trace_seq?: number;
+  trace_status?: StepTraceStatus;
+  agent_trace: unknown | null;
+  agent_logs?: unknown;
   duration_ms: number | null;
   error: string | null;
   retry_count: number;
   started_at: string | null;
   completed_at: string | null;
+}
+
+export interface TraceEventRecord {
+  id: string;
+  step_execution_id: string;
+  run_id: string;
+  step_id: string;
+  seq: number;
+  step_seq: number;
+  kind: TraceEventKind;
+  turn: number | null;
+  payload: unknown;
+  created_at: string;
 }
 
 export interface Schedule {

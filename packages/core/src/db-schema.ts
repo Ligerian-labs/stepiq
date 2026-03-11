@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -9,13 +10,14 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
 import type {
   PipelineStatus,
   Plan,
   RunFundingMode,
   RunStatus,
   StepStatus,
+  StepTraceStatus,
+  TraceEventKind,
   TriggerType,
 } from "./types";
 
@@ -187,6 +189,9 @@ export const runs = pgTable(
     error: text("error"),
     totalTokens: integer("total_tokens").default(0).notNull(),
     totalCostCents: integer("total_cost_cents").default(0).notNull(),
+    modelCostCents: integer("model_cost_cents").default(0).notNull(),
+    toolCostCents: integer("tool_cost_cents").default(0).notNull(),
+    toolCallsTotal: integer("tool_calls_total").default(0).notNull(),
     fundingMode: text("funding_mode")
       .$type<RunFundingMode>()
       .default("legacy")
@@ -222,6 +227,19 @@ export const stepExecutions = pgTable(
     inputTokens: integer("input_tokens").default(0).notNull(),
     outputTokens: integer("output_tokens").default(0).notNull(),
     costCents: integer("cost_cents").default(0).notNull(),
+    modelCostCents: integer("model_cost_cents").default(0).notNull(),
+    toolCostCents: integer("tool_cost_cents").default(0).notNull(),
+    toolCallsTotal: integer("tool_calls_total").default(0).notNull(),
+    toolCallsSuccess: integer("tool_calls_success").default(0).notNull(),
+    toolCallsFailed: integer("tool_calls_failed").default(0).notNull(),
+    traceEventCount: integer("trace_event_count").default(0).notNull(),
+    latestTraceSeq: integer("latest_trace_seq").default(0).notNull(),
+    traceStatus: text("trace_status")
+      .$type<StepTraceStatus>()
+      .default("idle")
+      .notNull(),
+    agentTrace: jsonb("agent_trace"),
+    agentLogs: jsonb("agent_logs"),
     durationMs: integer("duration_ms"),
     error: text("error"),
     retryCount: integer("retry_count").default(0).notNull(),
@@ -229,6 +247,37 @@ export const stepExecutions = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (table) => [index("step_exec_run").on(table.runId)],
+);
+
+export const stepTraceEvents = pgTable(
+  "step_trace_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    stepExecutionId: uuid("step_execution_id")
+      .references(() => stepExecutions.id, { onDelete: "cascade" })
+      .notNull(),
+    runId: uuid("run_id")
+      .references(() => runs.id, { onDelete: "cascade" })
+      .notNull(),
+    stepId: text("step_id").notNull(),
+    seq: integer("seq").notNull(),
+    stepSeq: integer("step_seq").notNull(),
+    kind: text("kind").$type<TraceEventKind>().notNull(),
+    turn: integer("turn"),
+    payload: jsonb("payload"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("step_trace_events_run").on(table.runId),
+    index("step_trace_events_step_exec").on(table.stepExecutionId),
+    uniqueIndex("step_trace_events_run_seq_unique").on(table.runId, table.seq),
+    uniqueIndex("step_trace_events_step_exec_seq_unique").on(
+      table.stepExecutionId,
+      table.stepSeq,
+    ),
+  ],
 );
 
 export const stripeEvents = pgTable("stripe_events", {
@@ -267,5 +316,73 @@ export const billingDiscountCodes = pgTable(
   (table) => [
     index("billing_discount_codes_code").on(table.code),
     index("billing_discount_codes_active").on(table.active),
+  ],
+);
+
+export const chatSessions = pgTable(
+  "chat_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    pipelineId: uuid("pipeline_id").references(() => pipelines.id, {
+      onDelete: "set null",
+    }),
+    title: text("title"),
+    modelId: text("model_id").notNull(),
+    pipelineVersion: integer("pipeline_version").default(1).notNull(),
+    status: text("status").default("active").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("chat_sessions_user").on(table.userId),
+    index("chat_sessions_pipeline").on(table.pipelineId),
+    index("chat_sessions_status").on(table.status),
+  ],
+);
+
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+      .references(() => chatSessions.id, { onDelete: "cascade" })
+      .notNull(),
+    role: text("role").notNull(),
+    content: text("content").notNull(),
+    pipelineState: jsonb("pipeline_state"),
+    pipelineVersion: integer("pipeline_version"),
+    action: text("action"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("chat_messages_session").on(table.sessionId)],
+);
+
+export const pipelineTemplates = pgTable(
+  "pipeline_templates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    description: text("description"),
+    category: text("category").notNull(),
+    definition: jsonb("definition").notNull(),
+    tags: text("tags").array().default([]).notNull(),
+    isPublic: boolean("is_public").default(true).notNull(),
+    usageCount: integer("usage_count").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("pipeline_templates_category").on(table.category),
+    index("pipeline_templates_public").on(table.isPublic),
   ],
 );

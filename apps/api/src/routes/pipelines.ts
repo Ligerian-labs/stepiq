@@ -32,6 +32,9 @@ import {
 } from "../services/plan-validator.js";
 import { enqueueRun } from "../services/queue.js";
 import { createScheduleForPipeline } from "../services/schedule-create.js";
+import { validateInputAgainstPipelineSchema } from "../services/input-schema.js";
+import { validatePipelineSecurity } from "../services/pipeline-security.js";
+import { checkRateLimit } from "../services/security-monitor.js";
 
 export const pipelineRoutes = new Hono<{ Variables: Env }>();
 
@@ -87,6 +90,18 @@ pipelineRoutes.post("/", async (c) => {
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
   const { name, description, definition, tags } = parsed.data;
+  const userPlan = String(c.get("userPlan") || "free");
+
+  const rateLimit = await checkRateLimit(userId, "pipeline_create");
+  if (!rateLimit.allowed) {
+    return c.json(
+      {
+        error: "Pipeline creation rate limit exceeded. Please wait before creating more pipelines.",
+        resetAt: rateLimit.resetAt,
+      },
+      429,
+    );
+  }
 
   try {
     await assertCanCreatePipeline(userId);
@@ -101,13 +116,25 @@ pipelineRoutes.post("/", async (c) => {
     throw err;
   }
 
+  const pipelineCheck = validatePipelineSecurity(definition, userId, userPlan);
+  if (!pipelineCheck.valid) {
+    return c.json(
+      {
+        error: "Pipeline definition failed security validation",
+        details: pipelineCheck.errors,
+      },
+      400,
+    );
+  }
+  const sanitizedDefinition = pipelineCheck.sanitized || definition;
+
   const [pipeline] = await db
     .insert(pipelines)
     .values({
       userId,
       name,
       description,
-      definition,
+      definition: sanitizedDefinition,
       tags: tags || [],
       status: "active",
     })
@@ -117,7 +144,7 @@ pipelineRoutes.post("/", async (c) => {
   await db.insert(pipelineVersions).values({
     pipelineId: pipeline.id,
     version: 1,
-    definition,
+    definition: sanitizedDefinition,
   });
 
   return c.json(pipeline, 201);
@@ -176,6 +203,22 @@ pipelineRoutes.put("/:id", async (c) => {
       }
       throw err;
     }
+
+    const pipelineCheck = validatePipelineSecurity(
+      parsed.data.definition,
+      userId,
+      String(c.get("userPlan") || "free"),
+    );
+    if (!pipelineCheck.valid) {
+      return c.json(
+        {
+          error: "Pipeline definition failed security validation",
+          details: pipelineCheck.errors,
+        },
+        400,
+      );
+    }
+    parsed.data.definition = pipelineCheck.sanitized || parsed.data.definition;
   }
 
   const newVersion = existing.version + 1;
@@ -243,6 +286,20 @@ pipelineRoutes.post("/:id/run", async (c) => {
     .limit(1);
 
   if (!pipeline) return c.json({ error: "Pipeline not found" }, 404);
+  const validation = validateInputAgainstPipelineSchema(
+    pipeline.definition as PipelineDefinition,
+    (parsed.data.input_data || {}) as Record<string, unknown>,
+  );
+  if (!validation.valid) {
+    return c.json(
+      {
+        error: "Input validation failed",
+        issues: validation.issues,
+        details: { issues: validation.issues },
+      },
+      422,
+    );
+  }
 
   let fundingMode: "legacy" | "app_credits" | "byok_required";
   try {
@@ -270,7 +327,7 @@ pipelineRoutes.post("/:id/run", async (c) => {
       userId,
       triggerType: "manual",
       status: "pending",
-      inputData: parsed.data.input_data || {},
+      inputData: validation.data,
       fundingMode,
     })
     .returning();
@@ -622,6 +679,18 @@ pipelineRoutes.post("/validate", async (c) => {
       });
     }
     throw err;
+  }
+
+  const pipelineCheck = validatePipelineSecurity(
+    parsed.data.definition,
+    userId,
+    String(c.get("userPlan") || "free"),
+  );
+  if (!pipelineCheck.valid) {
+    return c.json({
+      valid: false,
+      errors: pipelineCheck.errors,
+    });
   }
 
   return c.json({ valid: true });

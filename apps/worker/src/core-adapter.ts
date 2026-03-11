@@ -8,4 +8,10 @@ export {
   decryptSecret,
   redactSecrets,
 } from "@stepiq/core";
-export type { PipelineDefinition, Plan, RunFundingMode } from "@stepiq/core";
+export type {
+  PipelineDefinition,
+  Plan,
+  RunFundingMode,
+  StepTraceStatus,
+  TraceEventKind,
+} from "@stepiq/core";

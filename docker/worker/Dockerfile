@@ -12,12 +12,13 @@ COPY apps/worker/package.json apps/worker/
 RUN bun install --frozen-lockfile || bun install
 
 FROM base AS build
+RUN apk add --no-cache go
 COPY --from=deps /app .
 COPY tsconfig.json ./
 COPY packages/core packages/core
 COPY apps/api apps/api
 COPY apps/worker apps/worker
-RUN bun tsc -p packages/core/tsconfig.json && bun tsc -p apps/api/tsconfig.json && bun tsc -p apps/worker/tsconfig.json
+RUN bun tsc -p packages/core/tsconfig.json && bun tsc -p apps/api/tsconfig.json && bun run --filter @stepiq/worker build
 
 FROM base AS runtime
 COPY --from=deps /app/node_modules ./node_modules

@@ -1,1 +1,1 @@
-export * from "@stepiq/core/db";
+export * from "../../../../packages/core/src/db-schema.js";

@@ -23,6 +23,13 @@ describe("interpolate (Handlebars template engine)", () => {
     expect(result).toBe("Topic: AI trends");
   });
 
+  it("supports legacy variables namespace", () => {
+    const result = interpolate("Topic: {{variables.topic}}", {
+      variables: { topic: "AI trends" },
+    });
+    expect(result).toBe("Topic: AI trends");
+  });
+
   it("interpolates step outputs", () => {
     const result = interpolate("Previous: {{steps.research.output}}", {
       steps: { research: { output: "AI is growing" } },

@@ -18,12 +18,16 @@
     "@tanstack/react-router": "^1.111.0",
     "@tanstack/router-devtools": "^1.111.0",
     "posthog-js": "^1.356.1",
+    "prismjs": "^1.30.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwindcss": "^4.1.13",
     "yaml": "^2.8.2"
   },
   "devDependencies": {
+    "@types/prismjs": "^1.26.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",

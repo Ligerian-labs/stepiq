@@ -9,6 +9,7 @@ import { clearToken } from "../lib/auth";
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: "dashboard" },
   { to: "/pipelines", label: "Pipelines", icon: "workflow" },
+  { to: "/builder", label: "Builder", icon: "magic-wand" },
   { to: "/runs", label: "Runs", icon: "play" },
   { to: "/schedules", label: "Schedules", icon: "timer" },
   { to: "/templates", label: "Templates", icon: "layout-template" },
@@ -62,6 +63,26 @@ function NavIcon({
         <circle cx="18" cy="6" r="2" />
         <circle cx="12" cy="18" r="2" />
         <path d="M8 6h8M7.5 7.5l3.5 8M16.5 7.5l-3.5 8" />
+      </svg>
+    );
+  }
+  if (name === "magic-wand") {
+    return (
+      <svg
+        aria-hidden="true"
+        focusable="false"
+        className={className}
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8l1.4 1.4M17.8 6.2l1.4-1.4M3 21l9-9M12.2 6.2l-1.4-1.4" />
+        <path d="M15 9a2 2 0 100 4 2 2 0 000-4z" />
       </svg>
     );
   }
@@ -290,6 +311,7 @@ export function AppShell({
                 const isPlaceholder =
                   item.to !== "/dashboard" &&
                   item.to !== "/pipelines" &&
+                  item.to !== "/builder" &&
                   item.to !== "/runs" &&
                   item.to !== "/schedules";
                 if (isPlaceholder) {
@@ -473,6 +495,7 @@ export function AppShell({
             const isPlaceholder =
               item.to !== "/dashboard" &&
               item.to !== "/pipelines" &&
+              item.to !== "/builder" &&
               item.to !== "/runs" &&
               item.to !== "/schedules";
             if (isPlaceholder) {
